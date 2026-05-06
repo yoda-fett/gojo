@@ -1,0 +1,44 @@
+{
+  "name": "@gojo/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "sentry:sourcemaps": "sentry-cli sourcemaps inject .next && sentry-cli sourcemaps upload .next"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@gojo/db": "workspace:*",
+    "@gojo/types": "workspace:*",
+    "@sentry/nextjs": "^9.20.0",
+    "@t3-oss/env-nextjs": "^0.13.8",
+    "@tanstack/react-query": "^5.100.2",
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "ioredis": "^5.10.1",
+    "jose": "^6.2.2",
+    "lucide-react": "^1.11.0",
+    "nanoid": "^5.1.9",
+    "next": "^15.3.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwind-merge": "^3.5.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "jsdom": "^29.0.2",
+    "tailwindcss": "^4.1.4"
+  }
+}

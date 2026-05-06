@@ -1,0 +1,2 @@
+ALTER TABLE properties
+ADD COLUMN IF NOT EXISTS cost_config JSONB;

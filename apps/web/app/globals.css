@@ -1,0 +1,393 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --color-brand: #29805a;
+  --color-brand-strong: #1f6144;
+  --color-brand-soft: #dcefe4;
+  --color-ink: #10211c;
+  --color-muted: #566660;
+  --color-line: rgba(16, 33, 28, 0.1);
+  --color-surface: rgba(255, 255, 255, 0.86);
+  --color-surface-strong: #ffffff;
+  --color-page-top: #f4efe3;
+  --color-page-bottom: #eef5ef;
+  --color-charcoal: #1a2b2e;
+  --color-teal: #1da888;
+  --color-teal-dark: #0a6b58;
+  --color-mid-gray: #9eaeac;
+  --color-off-white: #f4f9f8;
+  --color-line-soft: #e8efee;
+  --color-amber: #e9c46a;
+  --color-coral: #e8763f;
+}
+
+.gojo-nav-item:not([data-active]):hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top left, rgba(233, 191, 111, 0.24), transparent 28%),
+    radial-gradient(circle at top right, rgba(41, 128, 90, 0.15), transparent 24%),
+    linear-gradient(180deg, var(--color-page-top) 0%, var(--color-page-bottom) 52%, #f8fbf8 100%);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: transparent;
+  text-rendering: optimizeLegibility;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(rgba(16, 33, 28, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(16, 33, 28, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(circle at center, black 38%, transparent 100%);
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(41, 128, 90, 0.22);
+}
+
+.gojo-page,
+.gojo-auth-shell {
+  min-height: 100vh;
+  padding: 32px 24px 48px;
+}
+
+.gojo-auth-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gojo-auth-frame {
+  width: min(1180px, 100%);
+  display: grid;
+  gap: 18px;
+}
+
+.gojo-auth-brand {
+  display: flex;
+  justify-content: center;
+}
+
+.gojo-auth-logo {
+  width: auto;
+  height: 56px;
+}
+
+.gojo-auth-card,
+.gojo-panel,
+.gojo-setup-card {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 28px 90px rgba(16, 33, 28, 0.1);
+}
+
+.gojo-auth-card,
+.gojo-panel,
+.gojo-setup-card {
+  border-radius: 28px;
+  padding: 24px;
+}
+
+.gojo-auth-layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+}
+
+.gojo-auth-content {
+  padding: 36px;
+}
+
+.gojo-auth-side {
+  display: grid;
+  align-content: center;
+  gap: 18px;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top right, rgba(41, 128, 90, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 251, 248, 0.96));
+}
+
+.gojo-page-header {
+  margin-bottom: 20px;
+}
+
+.gojo-page h1,
+.gojo-auth-card h1,
+.gojo-setup-card h2,
+.gojo-panel h2 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+}
+
+.gojo-eyebrow {
+  margin: 0 0 10px;
+  color: var(--color-brand-strong);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.gojo-copy {
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.gojo-auth-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.gojo-auth-field {
+  display: grid;
+  gap: 8px;
+}
+
+.gojo-auth-field span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.gojo-auth-field input {
+  min-height: 52px;
+  border-radius: 16px;
+  border: 1px solid rgba(16, 33, 28, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0 16px;
+  font-size: 16px;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.gojo-auth-field input:focus {
+  border-color: rgba(41, 128, 90, 0.55);
+  box-shadow: 0 0 0 4px rgba(41, 128, 90, 0.12);
+}
+
+.gojo-auth-phone-input {
+  display: flex;
+  align-items: stretch;
+  border-radius: 16px;
+  border: 1px solid rgba(16, 33, 28, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  overflow: hidden;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.gojo-auth-phone-input:focus-within {
+  border-color: rgba(41, 128, 90, 0.55);
+  box-shadow: 0 0 0 4px rgba(41, 128, 90, 0.12);
+}
+
+.gojo-auth-phone-prefix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+  background: rgba(16, 33, 28, 0.04);
+  border-right: 1px solid rgba(16, 33, 28, 0.08);
+  user-select: none;
+}
+
+.gojo-auth-phone-input input {
+  flex: 1;
+  min-height: 52px;
+  border: none;
+  background: transparent;
+  padding: 0 16px;
+  font-size: 16px;
+  letter-spacing: 0.5px;
+  color: var(--color-ink);
+  outline: none;
+}
+
+.gojo-auth-submit {
+  min-height: 52px;
+  border-radius: 16px;
+}
+
+.gojo-auth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.gojo-auth-message {
+  margin: 14px 0 0;
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.gojo-auth-message-info {
+  background: rgba(41, 128, 90, 0.12);
+  color: var(--color-brand-strong);
+}
+
+.gojo-auth-message-error {
+  background: rgba(200, 76, 46, 0.1);
+  color: #9d3e25;
+}
+
+.gojo-auth-footnote {
+  margin-top: 20px;
+  border-top: 1px solid rgba(16, 33, 28, 0.08);
+  padding-top: 18px;
+}
+
+.gojo-auth-footnote p,
+.gojo-auth-footnote strong {
+  display: block;
+}
+
+.gojo-auth-footnote strong {
+  margin-top: 6px;
+  font-size: 13px;
+}
+
+.gojo-auth-feature-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 12px;
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.gojo-setup-card {
+  display: grid;
+  gap: 20px;
+}
+
+.gojo-setup-list {
+  list-style: none;
+  display: grid;
+  gap: 14px;
+  padding: 0;
+  margin: 0;
+}
+
+.gojo-setup-item {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid rgba(16, 33, 28, 0.06);
+  border-radius: 20px;
+  background: var(--color-surface-strong);
+}
+
+.gojo-setup-item span {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-brand-soft);
+  color: var(--color-ink);
+  font-weight: 700;
+}
+
+.gojo-setup-item span.done {
+  background: var(--color-brand);
+  color: #ffffff;
+}
+
+.gojo-setup-item strong {
+  display: block;
+  font-size: 15px;
+}
+
+.gojo-setup-item p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.gojo-setup-item a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--color-ink);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .gojo-page,
+  .gojo-auth-shell {
+    padding: 20px 16px 32px;
+  }
+
+  .gojo-auth-content {
+    padding: 24px 20px;
+  }
+
+  .gojo-setup-item {
+    grid-template-columns: 36px 1fr;
+  }
+
+  .gojo-setup-item a {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 980px) {
+  .gojo-auth-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .gojo-auth-side {
+    order: 2;
+  }
+}

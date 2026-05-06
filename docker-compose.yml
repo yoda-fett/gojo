@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: gojo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gojo
+    ports:
+      - '5432:5432'
+    volumes:
+      - gojo-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d gojo']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: gojo-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - gojo-redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gojo-postgres-data:
+  gojo-redis-data:

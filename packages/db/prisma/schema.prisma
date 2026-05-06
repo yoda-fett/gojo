@@ -1,0 +1,566 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Property {
+  id                  String   @id @default(cuid())
+  name                String
+  slug                String   @unique
+  address             String
+  city                String
+  state               String
+  pincode             String
+  gstin               String?
+  invoiceSequence     Int      @default(0) @map("invoice_sequence")
+  invoiceSequenceYear Int      @default(0) @map("invoice_sequence_year")
+  creditNoteSequence     Int  @default(0) @map("credit_note_sequence")
+  creditNoteSequenceYear Int  @default(0) @map("credit_note_sequence_year")
+  conversionArcConfig Json?    @map("conversion_arc_config")
+  costConfig          Json?    @map("cost_config")
+  directBookingEnabled    Boolean @default(false) @map("direct_booking_enabled")
+  bookingSlug             String?  @unique @map("booking_slug")
+  averageOtaCommissionRate Float  @default(0.18) @map("average_ota_commission_rate")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+  deletedBy           String?  @map("deleted_by")
+
+  @@map("properties")
+}
+
+model RoomType {
+  id           String   @id @default(cuid())
+  propertyId   String   @map("property_id")
+  name         String
+  description  String?
+  maxOccupancy Int      @map("max_occupancy")
+  baseRate     Decimal  @db.Decimal(10, 2) @map("base_rate")
+  floorRate    Decimal  @db.Decimal(10, 2) @map("floor_rate")
+  ceilingRate  Decimal? @db.Decimal(10, 2) @map("ceiling_rate")
+  gstSlab      String   @map("gst_slab")
+  amenities    String[]
+  stateVersion Int      @default(0) @map("state_version")
+  createdAt    DateTime @default(now()) @map("created_at")
+  deletedAt    DateTime? @map("deleted_at")
+  deletedBy    String?  @map("deleted_by")
+
+  @@unique([propertyId, name])
+  @@map("room_types")
+}
+
+model Room {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  roomTypeId    String   @map("room_type_id")
+  number        String
+  floor         Int?
+  state         String
+  holdExpiresAt DateTime? @map("hold_expires_at")
+  holdRef       String?  @map("hold_ref")
+  stateVersion  Int      @default(0) @map("state_version")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     String?  @map("deleted_by")
+
+  @@unique([propertyId, number])
+  @@index([propertyId, state])
+  @@index([propertyId, holdExpiresAt])
+  @@map("rooms")
+}
+
+model Reservation {
+  id           String   @id @default(cuid())
+  propertyId   String   @map("property_id")
+  roomId       String   @map("room_id")
+  roomTypeId   String   @map("room_type_id")
+  guestId      String   @map("guest_id")
+  bookingReference String? @map("booking_reference")
+  checkIn      DateTime @map("check_in")
+  checkOut     DateTime @map("check_out")
+  status       String
+  source       String
+  otaRef       String?  @map("ota_ref")
+  rateSnapshot Json     @map("rate_snapshot")
+  selectedCancellationPolicyId String? @map("selected_cancellation_policy_id")
+  stateVersion Int      @default(0) @map("state_version")
+  cancelledAt  DateTime? @map("cancelled_at")
+  cancelReason String?  @map("cancel_reason")
+  noShowAt     DateTime? @map("no_show_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  deletedBy    String?  @map("deleted_by")
+
+  @@index([propertyId, status])
+  @@index([propertyId, checkIn])
+  @@index([propertyId, checkOut])
+  @@index([propertyId, bookingReference])
+  @@map("reservations")
+}
+
+model Folio {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  reservationId String   @map("reservation_id")
+  guestId       String   @map("guest_id")
+  parentFolioId String?  @map("parent_folio_id")
+  invoiceNumber String   @map("invoice_number")
+  status        String
+  stateVersion  Int      @default(0) @map("state_version")
+  settledAt     DateTime? @map("settled_at")
+  closedBy      String?  @map("closed_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     String?  @map("deleted_by")
+
+  @@index([propertyId, status])
+  @@unique([propertyId, invoiceNumber])
+  @@map("folios")
+}
+
+model FolioLine {
+  id          String   @id @default(cuid())
+  propertyId  String   @map("property_id")
+  folioId     String   @map("folio_id")
+  chargeType  String   @map("charge_type")
+  description String
+  amount      Decimal  @db.Decimal(10, 2)
+  taxAmount   Decimal  @db.Decimal(10, 2) @map("tax_amount")
+  gstSlab     String   @map("gst_slab")
+  currency    String   @default("INR")
+  reversalOf  String?  @map("reversal_of")
+  reversedBy  String?  @map("reversed_by")
+  reversedAt  DateTime? @map("reversed_at")
+  postedAt    DateTime @map("posted_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([folioId, postedAt])
+  @@index([folioId, gstSlab])
+  @@map("folio_lines")
+}
+
+model Guest {
+  id              String   @id @default(cuid())
+  propertyId      String   @map("property_id")
+  globalGuestId   String?  @map("global_guest_id")
+  guestCode       String   @map("guest_code")
+  fullName        String   @map("full_name")
+  phone           String
+  email           String?
+  idType          String?  @map("id_type")
+  idNumber        String?  @map("id_number")
+  consentGivenAt  DateTime @map("consent_given_at")
+  stateVersion    Int      @default(0) @map("state_version")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  deletedBy       String?  @map("deleted_by")
+
+  @@unique([propertyId, guestCode])
+  @@index([propertyId, phone])
+  @@map("guests")
+}
+
+model Subscription {
+  id              String   @id @default(cuid())
+  propertyId      String   @map("property_id")
+  planKey         String   @map("plan_key")
+  status          String
+  trialStartedAt  DateTime? @map("trial_started_at")
+  trialEndsAt     DateTime? @map("trial_ends_at")
+  gracePeriodDays Int      @default(7) @map("grace_period_days")
+  stateVersion    Int      @default(0) @map("state_version")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+  deletedBy       String?  @map("deleted_by")
+
+  @@unique([propertyId])
+  @@index([propertyId, status])
+  @@map("subscriptions")
+}
+
+model PropertyAccess {
+  id         String   @id @default(cuid())
+  propertyId String   @map("property_id")
+  userId     String   @map("user_id")
+  role       String
+  status     String   @default("ACTIVE")
+  invitedAt  DateTime? @map("invited_at")
+  invitedBy  String?  @map("invited_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  revokedAt  DateTime? @map("revoked_at")
+  deletedAt  DateTime? @map("deleted_at")
+  deletedBy  String?  @map("deleted_by")
+
+  @@unique([propertyId, userId])
+  @@index([propertyId, role])
+  @@map("property_access")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  deletedBy String?  @map("deleted_by")
+
+  @@map("users")
+}
+
+model OtpSession {
+  id                   String   @id @default(cuid())
+  sessionId            String   @unique @map("session_id")
+  phone                String
+  otpHash              String?  @map("otp_hash")
+  providerRequestId    String?  @map("provider_request_id")
+  invitationPropertyId String?  @map("invitation_property_id")
+  invitationRole       String?  @map("invitation_role")
+  expiresAt            DateTime @map("expires_at")
+  attempts             Int      @default(0)
+  maxAttempts          Int      @default(5) @map("max_attempts")
+  invalidatedAt        DateTime? @map("invalidated_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@index([phone, createdAt])
+  @@map("otp_sessions")
+}
+
+model CancellationPolicy {
+  id           String   @id @default(cuid())
+  propertyId   String   @map("property_id")
+  name         String
+  description  String?
+  windowHours  Int      @map("window_hours")
+  penaltyType  String   @map("penalty_type")
+  penaltyValue Decimal? @db.Decimal(5, 2) @map("penalty_value")
+  isDefault    Boolean  @default(false) @map("is_default")
+  createdAt    DateTime @default(now()) @map("created_at")
+  deletedAt    DateTime? @map("deleted_at")
+  deletedBy    String?  @map("deleted_by")
+
+  @@unique([propertyId, name])
+  @@index([propertyId])
+  @@map("cancellation_policies")
+}
+
+model RatePlan {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  roomTypeId    String   @map("room_type_id")
+  name          String
+  modifierType  String   @map("modifier_type")
+  modifierValue Decimal  @db.Decimal(10, 2) @map("modifier_value")
+  createdAt     DateTime @default(now()) @map("created_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     String?  @map("deleted_by")
+
+  @@unique([propertyId, roomTypeId, name])
+  @@index([propertyId, roomTypeId])
+  @@map("rate_plans")
+}
+
+model Alert {
+  id          String   @id @default(cuid())
+  propertyId  String   @map("property_id")
+  alertType   String   @map("alert_type")
+  severity    String
+  status      String   @default("ACTIVE")
+  message     String
+  entityId    String?  @map("entity_id")
+  entityType  String?  @map("entity_type")
+  dismissedBy String?  @map("dismissed_by")
+  dismissedAt DateTime? @map("dismissed_at")
+  resolvedAt  DateTime? @map("resolved_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([propertyId, status, createdAt])
+  @@index([propertyId, entityId])
+  @@map("alerts")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  propertyId String   @map("property_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  fromState  String?  @map("from_state")
+  toState    String?  @map("to_state")
+  actorId    String   @map("actor_id")
+  actorRole  String   @map("actor_role")
+  traceId    String?  @map("trace_id")
+  metadata   Json?
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([propertyId, createdAt])
+  @@index([propertyId, action, createdAt])
+  @@index([propertyId, actorId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Invoice {
+  id                  String    @id @default(cuid())
+  propertyId          String    @map("property_id")
+  folioId             String    @map("folio_id")
+  guestId             String    @map("guest_id")
+  invoiceNumber       String    @map("invoice_number")
+  type                String    @default("INVOICE")
+  status              String    @default("ISSUED")
+  parentInvoiceId     String?   @map("parent_invoice_id")
+  supplierGstin       String    @map("supplier_gstin")
+  supplierName        String    @map("supplier_name")
+  supplierAddress     String    @map("supplier_address")
+  recipientName       String    @map("recipient_name")
+  recipientGstin      String?   @map("recipient_gstin")
+  hsnCode             String    @default("9963") @map("hsn_code")
+  checkIn             DateTime  @map("check_in")
+  checkOut            DateTime  @map("check_out")
+  totalNights         Int       @map("total_nights")
+  taxableValue        Decimal   @db.Decimal(12, 2) @map("taxable_value")
+  cgstAmount          Decimal   @db.Decimal(12, 2) @map("cgst_amount")
+  sgstAmount          Decimal   @db.Decimal(12, 2) @map("sgst_amount")
+  totalAmount         Decimal   @db.Decimal(12, 2) @map("total_amount")
+  discountApplied     Decimal?  @db.Decimal(12, 2) @map("discount_applied")
+  invoiceRateSnapshot Json      @map("invoice_rate_snapshot")
+  creditNoteReason    String?   @map("credit_note_reason")
+  adjustedLines       Json?     @map("adjusted_lines")
+  invoiceDate         DateTime  @default(now()) @map("invoice_date")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  lines               InvoiceLine[]
+
+  @@unique([propertyId, invoiceNumber])
+  @@unique([folioId, type])
+  @@index([propertyId, invoiceDate])
+  @@index([propertyId, parentInvoiceId])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id                 String   @id @default(cuid())
+  invoiceId          String   @map("invoice_id")
+  propertyId         String   @map("property_id")
+  description        String
+  ratePerNight       Decimal  @db.Decimal(12, 2) @map("rate_per_night")
+  discountAmount     Decimal  @db.Decimal(12, 2) @default(0) @map("discount_amount")
+  postDiscountAmount Decimal  @db.Decimal(12, 2) @map("post_discount_amount")
+  gstSlab            String   @map("gst_slab")
+  cgstAmount         Decimal  @db.Decimal(12, 2) @map("cgst_amount")
+  sgstAmount         Decimal  @db.Decimal(12, 2) @map("sgst_amount")
+  lineTotal          Decimal  @db.Decimal(12, 2) @map("line_total")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  invoice            Invoice  @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+model IdempotencyKey {
+  id         String   @id @default(cuid())
+  key        String   @unique
+  status     String
+  response   Json?
+  error      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([status, updatedAt])
+  @@map("idempotency_keys")
+}
+
+model WebhookSecret {
+  id              String    @id @default(cuid())
+  propertyId      String    @map("property_id")
+  channelId       String?   @map("channel_id")
+  provider        String
+  secret          String
+  isActive        Boolean   @default(true) @map("is_active")
+  status          String    @default("ACTIVE")
+  activeFrom      DateTime  @default(now()) @map("active_from")
+  activeUntil     DateTime? @map("active_until")
+  rotatedAt       DateTime? @map("rotated_at")
+  expiredAt       DateTime? @map("expired_at")
+  rotationWindowHours Int   @default(24) @map("rotation_window_hours")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([propertyId, provider, isActive])
+  @@index([channelId, status])
+  @@map("webhook_secrets")
+}
+
+model Channel {
+  id              String    @id @default(cuid())
+  propertyId      String    @map("property_id")
+  channelType     String    @map("channel_type")
+  channelName     String    @map("channel_name")
+  webhookEndpoint String    @map("webhook_endpoint")
+  connectedBy     String    @map("connected_by")
+  connectedAt     DateTime  @default(now()) @map("connected_at")
+  deletedAt       DateTime? @map("deleted_at")
+  deletedBy       String?   @map("deleted_by")
+
+  @@unique([propertyId, channelType])
+  @@index([propertyId])
+  @@map("channels")
+}
+
+model WebhookEvent {
+  id               String    @id @default(cuid())
+  channelId        String    @map("channel_id")
+  propertyId       String    @map("property_id")
+  providerEventId  String    @map("provider_event_id")
+  eventType        String    @map("event_type")
+  rawPayload       Json      @map("raw_payload")
+  processingStatus String    @map("processing_status")
+  errorReason      String?   @map("error_reason")
+  reservationId    String?   @map("reservation_id")
+  attemptCount     Int       @default(0) @map("attempt_count")
+  receivedAt       DateTime  @default(now()) @map("received_at")
+  processedAt      DateTime? @map("processed_at")
+
+  @@unique([channelId, providerEventId])
+  @@index([channelId, processingStatus])
+  @@index([propertyId, receivedAt])
+  @@map("webhook_events")
+}
+
+model RefreshToken {
+  id         String   @id @default(cuid())
+  propertyId String   @map("property_id")
+  userId     String   @map("user_id")
+  tokenHash  String   @unique @map("token_hash")
+  expiresAt  DateTime @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([propertyId, userId])
+  @@map("refresh_tokens")
+}
+
+model PendingPayment {
+  id             String    @id @default(cuid())
+  propertyId     String    @map("property_id")
+  gatewayOrderId String    @unique @map("gateway_order_id")
+  holdId         String    @map("hold_id")
+  roomId         String    @map("room_id")
+  roomTypeId     String    @map("room_type_id")
+  guestName      String    @map("guest_name")
+  guestPhone     String    @map("guest_phone")
+  guestEmail     String?   @map("guest_email")
+  checkIn        DateTime  @map("check_in")
+  checkOut       DateTime  @map("check_out")
+  amount         Decimal   @db.Decimal(10, 2)
+  status         String    @default("PENDING")
+  gatewayEventId String?   @unique @map("gateway_event_id")
+  reservationId  String?   @map("reservation_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  confirmedAt    DateTime? @map("confirmed_at")
+
+  @@index([propertyId, status])
+  @@index([holdId])
+  @@map("pending_payments")
+}
+
+model NotificationLog {
+  id                String    @id @default(cuid())
+  propertyId        String    @map("property_id")
+  reservationId     String    @map("reservation_id")
+  channel           String
+  status            String
+  attemptCount      Int       @default(0) @map("attempt_count")
+  lastAttemptAt     DateTime? @map("last_attempt_at")
+  confirmedAt       DateTime? @map("confirmed_at")
+  errorReason       String?   @map("error_reason")
+  providerMessageId String?   @map("provider_message_id")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@unique([reservationId, channel])
+  @@index([propertyId, status])
+  @@map("notification_logs")
+}
+
+model UpiSettlementReconciliation {
+  id                       String   @id @default(cuid())
+  propertyId               String   @map("property_id")
+  date                     DateTime @db.Date
+  totalGatewayTransactions Int      @map("total_gateway_transactions")
+  totalLedgerTransactions  Int      @map("total_ledger_transactions")
+  discrepancyCount         Int      @default(0) @map("discrepancy_count")
+  status                   String
+  errorReason              String?  @map("error_reason")
+  runAt                    DateTime @default(now()) @map("run_at")
+  lines                    Json
+
+  @@unique([date, propertyId])
+  @@index([propertyId, date])
+  @@map("upi_settlement_reconciliations")
+}
+
+model ReconciliationDiscrepancy {
+  id               String    @id @default(cuid())
+  reconciliationId String    @map("reconciliation_id")
+  propertyId       String    @map("property_id")
+  date             DateTime  @db.Date
+  bookingRef       String    @map("booking_ref")
+  gatewayOrderId   String    @map("gateway_order_id")
+  gatewayAmount    Decimal   @db.Decimal(10, 2) @map("gateway_amount")
+  ledgerAmount     Decimal   @db.Decimal(10, 2) @map("ledger_amount")
+  discrepancyType  String    @map("discrepancy_type")
+  status           String    @default("UNRESOLVED")
+  acknowledgedAt   DateTime? @map("acknowledged_at")
+  acknowledgedBy   String?   @map("acknowledged_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([propertyId, status])
+  @@index([reconciliationId])
+  @@map("reconciliation_discrepancies")
+}
+
+model RoomBlock {
+  id         String    @id @default(cuid())
+  propertyId String    @map("property_id")
+  roomId     String    @map("room_id")
+  blockType  String    @map("block_type")
+  startDate  DateTime  @db.Date @map("start_date")
+  endDate    DateTime  @db.Date @map("end_date")
+  reason     String
+  createdBy  String    @map("created_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  deletedAt  DateTime? @map("deleted_at")
+  deletedBy  String?   @map("deleted_by")
+
+  @@index([roomId, startDate, endDate])
+  @@index([propertyId, deletedAt])
+  @@map("room_blocks")
+}
+
+model StateDivergenceEvent {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id")
+  serverVersion Int      @map("server_version")
+  clientVersion Int      @map("client_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([propertyId, createdAt])
+  @@map("state_divergence_events")
+}

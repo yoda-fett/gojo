@@ -1,0 +1,35 @@
+{
+  "name": "@gojo/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "prisma"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && prisma generate && tsc -p tsconfig.json && mkdir -p dist/generated && cp -R src/generated/client dist/generated/client",
+    "dev": "prisma generate --watch",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:seed": "prisma db seed",
+    "demo:seed": "tsx prisma/demo-seed.ts"
+  },
+  "dependencies": {
+    "@gojo/types": "workspace:*",
+    "@prisma/client": "^6.6.0",
+    "bcryptjs": "^3.0.3",
+    "ioredis": "^5.6.1",
+    "nanoid": "^5.1.9",
+    "redlock": "^5.0.0-beta.2"
+  },
+  "devDependencies": {
+    "prisma": "^6.6.0",
+    "tsx": "^4.19.3"
+  }
+}
