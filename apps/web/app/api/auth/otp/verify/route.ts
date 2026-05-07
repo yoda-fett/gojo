@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     if (env.OTP_PROVIDER === 'msg91' && providerRequestId) {
       const provider = await getOtpProvider();
       isValid = await provider.verifyOtp(providerRequestId, body.otp);
-    } else if (env.NODE_ENV !== 'production' && body.otp === '1234') {
+    } else if (env.OTP_PROVIDER === 'mock' && body.otp === '1234') {
       isValid = true;
     } else if (otpHash) {
       isValid = await compare(body.otp, otpHash);
