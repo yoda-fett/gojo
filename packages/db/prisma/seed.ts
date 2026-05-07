@@ -1,3 +1,30 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Load .env files before instantiating PrismaClient. The repo-root .env wins
+// over the package-local one; existing process.env values still take priority,
+// so `DATABASE_URL=… pnpm db:seed` overrides whatever is in the file.
+function loadEnv(filePath: string) {
+  if (!fs.existsSync(filePath)) return;
+  for (const rawLine of fs.readFileSync(filePath, 'utf8').split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+}
+
+const seedDir = path.dirname(fileURLToPath(import.meta.url));
+loadEnv(path.join(seedDir, '..', '.env'));
+loadEnv(path.join(seedDir, '..', '..', '..', '.env'));
+
 import { PrismaClient } from '../src/generated/client/index.js';
 
 const prisma = new PrismaClient();
@@ -12,7 +39,16 @@ async function upsertById<T extends { id: string }>(
   return existing ? update() : create();
 }
 
+function maskUrl(url: string | undefined) {
+  if (!url) return '<unset>';
+  return url.replace(/\/\/([^:]+):[^@]+@/, '//$1:***@');
+}
+
 async function main() {
+  console.log(`[seed] DATABASE_URL=${maskUrl(process.env.DATABASE_URL)}`);
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL is not set — refusing to run seed against an unknown DB');
+  }
   const propertyId = 'seed-property-1';
   const ownerId = 'seed-user-1';
   const managerId = 'seed-user-2';
@@ -76,13 +112,34 @@ async function main() {
     });
   }
 
-  for (const room of [
-    ['room-101', standardRoomTypeId, '101', 'AVAILABLE'],
+  // 18 rooms across 3 room types matching the housekeeping wireframe.
+  // States seeded to exercise every UI state: AVAILABLE, OCCUPIED, DIRTY,
+  // CLEAN, OUT_OF_ORDER, MAINTENANCE.
+  const ROOMS = [
+    // Standard Single (rooms 101-105)
+    ['room-101', standardRoomTypeId, '101', 'OCCUPIED'],
     ['room-102', standardRoomTypeId, '102', 'DIRTY'],
-    ['room-201', deluxeRoomTypeId, '201', 'MAINTENANCE'],
+    ['room-103', standardRoomTypeId, '103', 'DIRTY'],
+    ['room-104', standardRoomTypeId, '104', 'AVAILABLE'],
+    ['room-105', standardRoomTypeId, '105', 'CLEAN'],
+    // Deluxe Double (rooms 201-206)
+    ['room-201', deluxeRoomTypeId, '201', 'CLEAN'],
     ['room-202', deluxeRoomTypeId, '202', 'AVAILABLE'],
-    ['room-301', flexRoomTypeId, '301', 'AVAILABLE'],
-  ] as const) {
+    ['room-203', deluxeRoomTypeId, '203', 'OCCUPIED'],
+    ['room-204', deluxeRoomTypeId, '204', 'DIRTY'],
+    ['room-205', deluxeRoomTypeId, '205', 'AVAILABLE'],
+    ['room-206', deluxeRoomTypeId, '206', 'AVAILABLE'],
+    // Superior / Family (rooms 301-307)
+    ['room-301', flexRoomTypeId, '301', 'OCCUPIED'],
+    ['room-302', flexRoomTypeId, '302', 'DIRTY'],
+    ['room-303', flexRoomTypeId, '303', 'CLEAN'],
+    ['room-304', flexRoomTypeId, '304', 'OUT_OF_ORDER'],
+    ['room-305', flexRoomTypeId, '305', 'DIRTY'],
+    ['room-306', flexRoomTypeId, '306', 'AVAILABLE'],
+    ['room-307', flexRoomTypeId, '307', 'MAINTENANCE'],
+  ] as const;
+
+  for (const room of ROOMS) {
     await prisma.room.upsert({
       where: { propertyId_number: { propertyId, number: room[2] } },
       update: { roomTypeId: room[1], state: room[3] },
@@ -92,6 +149,59 @@ async function main() {
         roomTypeId: room[1],
         number: room[2],
         state: room[3],
+      },
+    });
+  }
+
+  // Active room blocks driving the OUT_OF_ORDER / MAINTENANCE rooms above.
+  // Idempotent via deterministic ids.
+  const today = new Date();
+  const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const fourDaysAgo = new Date(todayDate);
+  fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+  const fourDaysAhead = new Date(todayDate);
+  fourDaysAhead.setDate(fourDaysAhead.getDate() + 4);
+  const tenDaysAhead = new Date(todayDate);
+  tenDaysAhead.setDate(tenDaysAhead.getDate() + 10);
+
+  for (const block of [
+    {
+      id: 'seed-block-304-plumbing',
+      roomId: 'room-304',
+      blockType: 'OUT_OF_ORDER',
+      startDate: fourDaysAgo,
+      endDate: fourDaysAhead,
+      reason: 'Plumbing issue — geyser leak',
+    },
+    {
+      id: 'seed-block-307-paint',
+      roomId: 'room-307',
+      blockType: 'MAINTENANCE',
+      startDate: todayDate,
+      endDate: tenDaysAhead,
+      reason: 'Scheduled repaint and deep clean',
+    },
+  ] as const) {
+    await prisma.roomBlock.upsert({
+      where: { id: block.id },
+      update: {
+        roomId: block.roomId,
+        blockType: block.blockType,
+        startDate: block.startDate,
+        endDate: block.endDate,
+        reason: block.reason,
+        deletedAt: null,
+        deletedBy: null,
+      },
+      create: {
+        id: block.id,
+        propertyId,
+        roomId: block.roomId,
+        blockType: block.blockType,
+        startDate: block.startDate,
+        endDate: block.endDate,
+        reason: block.reason,
+        createdBy: ownerId,
       },
     });
   }
@@ -408,7 +518,16 @@ async function main() {
 }
 
 main()
+  .then(async () => {
+    const [rooms, accesses, blocks] = await Promise.all([
+      prisma.room.count({ where: { propertyId: 'seed-property-1' } }),
+      prisma.propertyAccess.count({ where: { propertyId: 'seed-property-1' } }),
+      prisma.roomBlock.count({ where: { propertyId: 'seed-property-1', deletedAt: null } }),
+    ]);
+    console.log(`[seed] done — rooms=${rooms} propertyAccess=${accesses} activeBlocks=${blocks}`);
+  })
   .catch((error) => {
+    console.error('[seed] FAILED');
     console.error(error);
     process.exit(1);
   })
