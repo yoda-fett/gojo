@@ -1,7 +1,7 @@
 {
   "functions": {
     "app/api/**/*": {
-      "includeFiles": "../../packages/db/src/generated/client/**"
+      "includeFiles": "src/generated/client/**"
     }
   }
 }

@@ -21,3 +21,4 @@ epics.md
 2-gojo-UX-PRD.md
 packages/db/src/generated
 packages/db/prisma/dev.db
+apps/web/src/generated

@@ -12,9 +12,17 @@ const monorepoRoot = path.resolve(webRoot, '..', '..');
 
 const sourceDir = path.join(monorepoRoot, 'packages/db/src/generated/client');
 const targets = [
+  // Primary target — matches Prisma's first runtime search path on Vercel:
+  //   /var/task/apps/web/src/generated/client
+  path.join(webRoot, 'src/generated/client'),
+  // Belt and braces — also drop into .next/server which Vercel always bundles.
   path.join(webRoot, '.next/server'),
   path.join(webRoot, '.next/standalone/apps/web/.next/server'),
 ];
+
+// Ensure the primary target exists (it's pre-build, the dir won't be there yet).
+const primary = targets[0];
+fs.mkdirSync(primary, { recursive: true });
 
 if (!fs.existsSync(sourceDir)) {
   console.warn(`[copy-prisma-engine] Source directory not found: ${sourceDir}`);
