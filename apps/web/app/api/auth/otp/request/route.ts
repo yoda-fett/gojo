@@ -66,10 +66,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ code: 'VALIDATION_ERROR', message: error.issues[0]?.message ?? 'Invalid request' }, { status: 422 });
     }
 
+    console.error('[otp/request] Unhandled error:', error);
     return NextResponse.json(
       {
         code: 'INTERNAL_ERROR',
-        message: process.env['NODE_ENV'] === 'development' && error instanceof Error ? error.message : 'Unexpected error',
+        message: error instanceof Error ? error.message : 'Unexpected error',
       },
       { status: 500 },
     );

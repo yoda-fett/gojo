@@ -25,7 +25,14 @@ export function withAuth(
         );
       }
 
-      return NextResponse.json({ code: 'INTERNAL_ERROR', message: 'Unexpected error' }, { status: 500 });
+      console.error('[withAuth] Unhandled error:', error);
+      return NextResponse.json(
+        {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Unexpected error',
+        },
+        { status: 500 },
+      );
     }
   };
 }
