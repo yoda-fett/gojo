@@ -105,8 +105,8 @@ export function OccupancyRevenueChart({ data, xLabelStep, xLabelCount, occupancy
     setHoverIdx(null);
   }
 
-  const occPath = data.map((_, i) => `${i === 0 ? 'M' : 'L'}${xs[i].toFixed(2)},${occY[i].toFixed(2)}`).join(' ');
-  const revPath = data.map((_, i) => `${i === 0 ? 'M' : 'L'}${xs[i].toFixed(2)},${revY[i].toFixed(2)}`).join(' ');
+  const occPath = data.map((_, i) => `${i === 0 ? 'M' : 'L'}${(xs[i] ?? 0).toFixed(2)},${(occY[i] ?? 0).toFixed(2)}`).join(' ');
+  const revPath = data.map((_, i) => `${i === 0 ? 'M' : 'L'}${(xs[i] ?? 0).toFixed(2)},${(revY[i] ?? 0).toFixed(2)}`).join(' ');
 
   const hoverPoint = hoverIdx != null ? data[hoverIdx] : null;
   const hoverX = hoverIdx != null ? xs[hoverIdx] : null;
@@ -150,7 +150,7 @@ export function OccupancyRevenueChart({ data, xLabelStep, xLabelCount, occupancy
         {/* X labels */}
         {xLabelIdxs.map((idx) => (
           <text key={idx} x={xs[idx]} y={VIEW_H - 10} fontSize="10" fill="#9EAEAC" textAnchor="middle">
-            {formatXLabel(data[idx].date)}
+            {data[idx] ? formatXLabel(data[idx]!.date) : ''}
           </text>
         ))}
 

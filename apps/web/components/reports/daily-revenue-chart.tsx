@@ -150,7 +150,7 @@ export function DailyRevenueChart({ data, changeRangeHref = '/reports/revenue' }
           const isLast = idx === dates.length - 1;
           return (
             <text key={i} x={xs[idx]} y={H - 8} fontSize="9" fill={isLast ? '#1DA888' : '#9EAEAC'} fontWeight={isLast ? 600 : 400} textAnchor="middle">
-              {isLast ? 'Today' : shortDate(dates[idx])}
+              {isLast ? 'Today' : shortDate(dates[idx] ?? '')}
             </text>
           );
         })}

@@ -19,7 +19,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export function StatusChip({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? STATUS_STYLES.CONFIRMED;
+  const style = STATUS_STYLES[status] ?? STATUS_STYLES.CONFIRMED ?? { bg: '#F4F9F8', color: '#1A2B2E' };
   const label = STATUS_LABELS[status] ?? status
     .split('_')
     .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
