@@ -29,8 +29,10 @@ const schema = fs.existsSync(path.join(sourceDir, 'schema.prisma'))
   : [];
 
 if (engines.length === 0) {
-  console.warn(`[copy-prisma-engine] No Linux engine binary found in ${sourceDir}`);
-  process.exit(0);
+  console.error(`[copy-prisma-engine] FATAL: No Linux engine binary in ${sourceDir}`);
+  console.error(`[copy-prisma-engine] Files present: ${fs.readdirSync(sourceDir).join(', ')}`);
+  console.error('[copy-prisma-engine] Did `prisma generate` run with binaryTargets=["native","rhel-openssl-3.0.x"]?');
+  process.exit(1);
 }
 
 let copied = 0;
