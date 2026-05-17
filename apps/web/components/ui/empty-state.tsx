@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+export type EmptyStateReason = 'unconfigured' | 'quiet' | 'filter-no-results';
+
 type EmptyStateProps = {
   icon: ReactNode;
   heading: string;
@@ -9,6 +11,15 @@ type EmptyStateProps = {
   ctaHref?: string;
   onCtaClick?: () => void;
   iconTone?: 'teal' | 'gray' | 'amber';
+  /**
+   * Why is this state empty? Drives tone defaults so the user can tell apart
+   * "you haven't configured this yet" from "today is just quiet" from
+   * "your filters return nothing".
+   *   - `unconfigured` (default): action expected, keep the CTA strong
+   *   - `quiet`: soft tone, no CTA (overrides any cta props)
+   *   - `filter-no-results`: defaults icon to gray + cta copy to "Clear filters"
+   */
+  reason?: EmptyStateReason;
 };
 
 const ICON_TONE_BG: Record<NonNullable<EmptyStateProps['iconTone']>, string> = {
@@ -23,8 +34,25 @@ const ICON_TONE_FG: Record<NonNullable<EmptyStateProps['iconTone']>, string> = {
   amber: '#C49A10',
 };
 
-export function EmptyState({ icon, heading, body, ctaLabel, ctaHref, onCtaClick, iconTone = 'teal' }: EmptyStateProps) {
-  const cta = ctaLabel
+export function EmptyState({
+  icon,
+  heading,
+  body,
+  ctaLabel,
+  ctaHref,
+  onCtaClick,
+  iconTone,
+  reason = 'unconfigured',
+}: EmptyStateProps) {
+  const resolvedIconTone: NonNullable<EmptyStateProps['iconTone']> =
+    iconTone ?? (reason === 'filter-no-results' || reason === 'quiet' ? 'gray' : 'teal');
+
+  const showCta = reason !== 'quiet';
+  const resolvedCtaLabel = showCta
+    ? ctaLabel ?? (reason === 'filter-no-results' ? 'Clear filters' : undefined)
+    : undefined;
+
+  const cta = resolvedCtaLabel
     ? ctaHref
       ? (
         <Link
@@ -43,7 +71,7 @@ export function EmptyState({ icon, heading, body, ctaLabel, ctaHref, onCtaClick,
             textDecoration: 'none',
           }}
         >
-          {ctaLabel}
+          {resolvedCtaLabel}
         </Link>
         )
       : (
@@ -62,7 +90,7 @@ export function EmptyState({ icon, heading, body, ctaLabel, ctaHref, onCtaClick,
             cursor: 'pointer',
           }}
         >
-          {ctaLabel}
+          {resolvedCtaLabel}
         </button>
         )
     : null;
@@ -88,8 +116,8 @@ export function EmptyState({ icon, heading, body, ctaLabel, ctaHref, onCtaClick,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: ICON_TONE_BG[iconTone],
-          color: ICON_TONE_FG[iconTone],
+          background: ICON_TONE_BG[resolvedIconTone],
+          color: ICON_TONE_FG[resolvedIconTone],
         }}
       >
         {icon}

@@ -151,9 +151,9 @@ const NAV_ROW_BASE: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 10,
-  padding: '5px 20px',
-  fontSize: 10,
-  fontWeight: 440,
+  padding: '7px 20px',
+  fontSize: 13.5,
+  fontWeight: 400,
   letterSpacing: '0.02em',
   textDecoration: 'none',
   position: 'relative',
@@ -293,7 +293,7 @@ function SidebarNav({ role }: { role?: Role }) {
                 type="button"
                 onClick={() => toggle(sectionKey)}
                 aria-expanded={sectionOpen}
-                className="mb-[2px] flex w-full items-center gap-[6px] px-5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[rgba(158,174,172,0.6)] transition-colors hover:text-[rgba(158,174,172,0.9)]"
+                className="mb-[2px] flex w-full items-center gap-[6px] px-5 text-[9px] font-medium uppercase tracking-[0.14em] text-[rgba(158,174,172,0.55)] transition-colors hover:text-[rgba(158,174,172,0.9)]"
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 <ChevronDown
