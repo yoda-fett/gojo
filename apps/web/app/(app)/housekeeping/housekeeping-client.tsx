@@ -28,10 +28,12 @@ interface HousekeepingResponse {
   };
 }
 
+// TODO: re-add { key: 'in-progress', label: 'In Progress' } when the housekeeping
+// state machine tracks an active-cleaning state (matching counts.inProgress in
+// /api/housekeeping). Today both the filter and the KPI would always be empty.
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'to-clean', label: 'To Clean' },
-  { key: 'in-progress', label: 'In Progress' },
   { key: 'clean', label: 'Clean' },
   { key: 'oor', label: 'Out of Order' },
 ] as const;
@@ -51,7 +53,6 @@ const STATE_BADGE: Record<string, { label: string; bg: string; text: string }> =
 function passesFilter(row: HousekeepingRow, filter: FilterKey) {
   if (filter === 'all') return true;
   if (filter === 'to-clean') return row.state === 'DIRTY';
-  if (filter === 'in-progress') return false;
   if (filter === 'clean') return row.state === 'CLEAN' || row.state === 'AVAILABLE';
   if (filter === 'oor') return row.state === 'OUT_OF_ORDER' || row.state === 'MAINTENANCE';
   return true;
@@ -110,10 +111,12 @@ export function HousekeepingClient() {
         </div>
       </header>
 
-      <section className="grid grid-cols-5 gap-3">
+      {/* TODO: re-add the "In Progress" KpiCard once the housekeeping state
+          machine tracks an active-cleaning state (counts.inProgress is hardcoded
+          to 0 in /api/housekeeping today). */}
+      <section className="grid grid-cols-4 gap-3">
         <KpiCard label="Total Rooms" value={counts.total} sub="Property" />
         <KpiCard label="Needs Cleaning" value={counts.needsCleaning} sub="Priority queue" tone="amber" />
-        <KpiCard label="In Progress" value={counts.inProgress} sub="Assigned" tone="teal" />
         <KpiCard label="Clean & Ready" value={counts.cleanReady} sub="Available" tone="teal" />
         <KpiCard label="Out of Order" value={counts.outOfOrder} sub="Maintenance" tone="coral" />
       </section>

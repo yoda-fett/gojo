@@ -2,6 +2,7 @@
 import { prisma } from '@gojo/db';
 import { AUDIT_ACTION_LABELS, AUDIT_CATEGORY_MAP, getAuditCategory } from '@gojo/types';
 
+import { formatAuditSummary } from '@/lib/audit/format-summary';
 import { AuditVolumeChart } from '@/components/audit/audit-volume-chart';
 import { CategoryFilterChips } from '@/components/audit/category-filter-chips';
 import { ReportCard } from '@/components/reports/report-card';
@@ -144,14 +145,12 @@ export default async function AuditTrailPage({ searchParams }: { searchParams?: 
               <tbody>
                 {tableRows.map((row) => {
                   const user = userLookup[row.actorId];
-                  const summary = row.metadata
-                    ? Object.entries(row.metadata as Record<string, unknown>)
-                        .slice(0, 3)
-                        .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-                        .join(' · ')
-                    : row.fromState && row.toState
-                      ? `${row.fromState} → ${row.toState}`
-                      : '—';
+                  const summary = formatAuditSummary({
+                    action: row.action,
+                    metadata: row.metadata as Record<string, unknown> | null,
+                    fromState: row.fromState,
+                    toState: row.toState,
+                  });
                   return (
                     <tr key={row.id} className="border-t border-[#F0F5F4]">
                       <td className="px-6 py-3 font-mono text-[12px] text-[var(--color-mid-gray)]">{formatIstTimestamp(row.createdAt)}</td>

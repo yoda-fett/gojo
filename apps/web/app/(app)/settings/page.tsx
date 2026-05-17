@@ -70,19 +70,21 @@ export default async function SettingsHomePage() {
       title: 'Room Types',
       description: 'Occupancy, base & floor rate, GST slab and amenities per room type.',
       icon: '🛏️',
+      href: '/settings/room-types',
       status: countStatus(roomTypes, 'room type'),
     },
     {
       title: 'Rooms',
       description: 'Physical room units, each assigned to a room type and a floor.',
       icon: '🚪',
+      href: '/settings/rooms',
       status: countStatus(rooms, 'room'),
     },
     {
       title: 'Users & Roles',
       description: 'Invite Managers, Front Desk and Housekeeping staff and assign roles.',
       icon: '👥',
-      href: '/settings/user-roles',
+      href: '/settings/users-roles',
       status:
         teamMembers > 0
           ? { label: `${teamMembers} team member${teamMembers === 1 ? '' : 's'}`, tone: 'ok' }
