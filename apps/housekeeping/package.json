@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "next build",
+    "build": "pnpm --dir ../../packages/db exec prisma generate && node scripts/copy-prisma-engine.mjs && next build && node scripts/copy-prisma-engine.mjs",
     "dev": "next dev -p 3001",
     "lint": "eslint .",
     "test": "vitest run",

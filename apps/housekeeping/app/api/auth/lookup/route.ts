@@ -7,6 +7,8 @@ const Body = z.object({ phone: z.string().regex(/^\d{10}$/) });
 
 export async function POST(req: Request) {
   const body = Body.parse(await req.json());
+  const phone = body.phone.startsWith('+') ? body.phone : `+91${body.phone}`;
+  
   const user = await prisma.user.findUnique({ where: { phone: `+91${body.phone}` } });
   if (!user) {
     return NextResponse.json({ code: 'NOT_FOUND', message: 'Phone not registered' }, { status: 404 });

@@ -59,44 +59,54 @@ export function SignInClient() {
   async function lookupPhone() {
     setError('');
     setSubmitting(true);
-    const res = await fetch('/api/auth/lookup', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ phone }),
-    });
-    const payload = await res.json();
-    setSubmitting(false);
-    if (!res.ok) {
-      setError(payload.message ?? 'Unable to look up phone');
-      return;
+    try {
+      const res = await fetch('/api/auth/lookup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(payload.message ?? `Unable to look up phone (${res.status})`);
+        return;
+      }
+      const hasPin = Boolean(payload.hasPin);
+      if (hasPin) {
+        setNeedsPinSetup(false);
+        setPin('');
+        setStep('pin');
+        return;
+      }
+      setNeedsPinSetup(true);
+      await requestOtp();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
-    const hasPin = Boolean(payload.hasPin);
-    if (hasPin) {
-      setNeedsPinSetup(false);
-      setPin('');
-      setStep('pin');
-      return;
-    }
-    setNeedsPinSetup(true);
-    await requestOtp();
   }
 
   async function lookupAndForceOtp() {
     setError('');
     setSubmitting(true);
-    const res = await fetch('/api/auth/lookup', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ phone }),
-    });
-    const payload = await res.json();
-    setSubmitting(false);
-    if (!res.ok) {
-      setError(payload.message ?? 'Unable to look up phone');
-      return;
+    try {
+      const res = await fetch('/api/auth/lookup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ phone }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(payload.message ?? `Unable to look up phone (${res.status})`);
+        return;
+      }
+      setNeedsPinSetup(!payload.hasPin);
+      await requestOtp(payload.hasPin);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
-    setNeedsPinSetup(!payload.hasPin);
-    await requestOtp(payload.hasPin);
   }
 
   async function skipPinSetup() {
