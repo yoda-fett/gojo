@@ -96,6 +96,7 @@ async function logAttempt(
   }
 }
 
+/** @gateExempt Async notification dispatch — system context, no Owner actor. */
 export async function dispatchBookingConfirmation(reservationId: string) {
   const reservation = await prisma.reservation.findUnique({ where: { id: reservationId } });
   if (!reservation) return { sent: 0 };

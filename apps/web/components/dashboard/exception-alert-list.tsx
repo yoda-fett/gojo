@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { ErrorMessage } from '@/components/ui/error-message';
+import { alertHref } from '@/lib/dashboard/alert-links';
 import { formatIST } from '@/lib/tz';
 
 const severityStyles = {
@@ -20,7 +21,7 @@ export function ExceptionAlertList({ propertyId }: { propertyId: string }) {
     queryFn: async () => {
       const response = await fetch('/api/dashboard/alerts');
       if (!response.ok) throw new Error('Unable to load alerts');
-      return (await response.json()) as { alerts: { id: string; severity: 'HIGH' | 'MEDIUM' | 'LOW'; message: string; entityId?: string; createdAt: string }[]; total: number };
+      return (await response.json()) as { alerts: { id: string; severity: 'HIGH' | 'MEDIUM' | 'LOW'; message: string; alertType?: string; entityType?: string; entityId?: string; createdAt: string }[]; total: number };
     },
     refetchInterval: 30_000,
   });
@@ -71,7 +72,7 @@ export function ExceptionAlertList({ propertyId }: { propertyId: string }) {
               <p className="text-[13px] text-[var(--color-charcoal)]">{alert.message}</p>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-[var(--color-mid-gray)]">
                 <span>{formatIST(alert.createdAt, 'dd MMM, hh:mm a')}</span>
-                {alert.entityId ? <Link href={`/reservations/${alert.entityId}`} className="font-semibold text-[var(--color-teal-dark)]">View →</Link> : null}
+                {alertHref(alert) ? <Link href={alertHref(alert) ?? '#'} className="font-semibold text-[var(--color-teal-dark)]">View →</Link> : null}
               </div>
             </div>
             <button type="button" aria-label="Dismiss alert" onClick={() => dismiss.mutate(alert.id)} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-[8px] text-[var(--color-mid-gray)] hover:bg-[var(--color-off-white)]">

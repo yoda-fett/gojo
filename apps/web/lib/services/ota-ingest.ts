@@ -50,6 +50,7 @@ export function detectEventType(payload: Record<string, unknown>): WebhookEventT
   return 'RESERVATION_INGEST';
 }
 
+/** @gateExempt Inbound OTA webhook — signature-verified at boundary; no Owner actor. */
 export async function logWebhookEvent({
   channelId,
   propertyId,
@@ -96,6 +97,7 @@ async function markStatus(
   });
 }
 
+/** @gateExempt Inbound OTA webhook ingest — no Owner actor; gated upstream. */
 export async function processReservationIngest({
   channelId,
   propertyId,
@@ -197,6 +199,7 @@ export async function processReservationIngest({
   });
 }
 
+/** @gateExempt Inbound OTA cancellation webhook — no Owner actor; gated upstream. */
 export async function processCancellationIngest({
   channelId,
   propertyId,
@@ -282,6 +285,7 @@ export async function processCancellationIngest({
   });
 }
 
+/** @gateExempt OTA failure-path system handler — no Owner actor. */
 export async function recordPermanentFailure({
   channelId,
   providerEventId,

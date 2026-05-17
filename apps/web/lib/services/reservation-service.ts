@@ -293,10 +293,6 @@ async function ensureRoomAvailable(tx, actor, roomId, checkIn, checkOut, exclude
 }
 
 function validateRateAgainstRoomType(roomType, rate, belowFloorOverride?: boolean) {
-  if (rate > numberize(roomType.ceilingRate ?? rate)) {
-    throw new AppError('VALIDATION_ERROR', 'Rate is above the room type ceiling', 400);
-  }
-
   if (rate < numberize(roomType.floorRate) && !belowFloorOverride) {
     throw new AppError('VALIDATION_ERROR', 'Below floor rate requires explicit confirmation', 400);
   }
@@ -517,6 +513,7 @@ export async function getReservationDetail(actor, reservationId) {
 }
 
 export async function revealReservationGuestId(actor, reservationId) {
+  await checkSubscriptionGate(actor, 'guest_id.reveal', prisma);
   if (!['OWNER', 'MANAGER'].includes(actor.role)) {
     throw new AppError('FORBIDDEN', 'Only owners and managers can reveal guest ID', 403);
   }
@@ -628,6 +625,7 @@ export async function getReservationFolio(actor, reservationId) {
 }
 
 export async function addFolioLine(actor, folioId, input) {
+  await checkSubscriptionGate(actor, 'folio.post_charge', prisma);
   const folio = await prisma.folio.findFirst({
     where: { id: folioId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -696,6 +694,7 @@ async function getReservationFolioByFolio(actor, folioId) {
 }
 
 export async function voidFolioLine(actor, folioId, lineId) {
+  await checkSubscriptionGate(actor, 'folio.post_charge', prisma);
   if (!['OWNER', 'MANAGER'].includes(actor.role)) {
     throw new AppError('FORBIDDEN', 'Only owners and managers can void folio lines', 403);
   }

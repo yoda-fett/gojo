@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { prisma, writeAuditLog } from '@gojo/db';
+import { checkSubscriptionGate, prisma, writeAuditLog } from '@gojo/db';
 import { AppError } from '@gojo/types';
 import { startOfDay } from 'date-fns';
 
@@ -22,6 +22,7 @@ export async function createRoomBlock({
   endDate: Date;
   reason: string;
 }) {
+  await checkSubscriptionGate(actor, 'room.create_block', prisma);
   if (endDate < startDate) {
     throw new AppError('VALIDATION_ERROR', 'endDate must be on or after startDate', 400);
   }
@@ -76,6 +77,7 @@ export async function liftRoomBlock({
   actor: { userId: string; propertyId: string; role: string };
   blockId: string;
 }) {
+  await checkSubscriptionGate(actor, 'room.lift_block', prisma);
   const block = await prisma.roomBlock.findFirst({
     where: { id: blockId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -136,6 +138,7 @@ export async function isRoomBlockedForRange(roomId: string, checkIn: Date, check
   return overlapping ?? null;
 }
 
+/** @gateExempt Cron sweep — system context, no Owner actor. */
 export async function sweepExpiredBlocks() {
   const today = startOfDay(new Date());
   const expired = await prisma.roomBlock.findMany({

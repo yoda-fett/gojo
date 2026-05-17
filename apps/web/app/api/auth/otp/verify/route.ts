@@ -14,7 +14,7 @@ import { env } from '@/env';
 
 const otpVerifySchema = z.object({
   sessionId: z.string().min(1),
-  otp: z.string().min(4).max(6),
+  otp: z.string().regex(/^\d{6}$/),
 });
 
 const otpSessionRecordSchema = z.object({
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     if (env.OTP_PROVIDER === 'msg91' && providerRequestId) {
       const provider = await getOtpProvider();
       isValid = await provider.verifyOtp(providerRequestId, body.otp);
-    } else if (env.OTP_PROVIDER === 'mock' && body.otp === '1234') {
+    } else if (env.OTP_PROVIDER === 'mock' && body.otp === '123456') {
       isValid = true;
     } else if (otpHash) {
       isValid = await compare(body.otp, otpHash);
@@ -173,11 +173,13 @@ export async function POST(req: Request) {
       }),
     );
 
+    const hasPin = Boolean(user.pinHash);
+
     if (properties.length > 1) {
-      return NextResponse.json({ userId, properties });
+      return NextResponse.json({ userId, properties, hasPin });
     }
 
-    return NextResponse.json({ userId, defaultPropertyId: activeAccess.propertyId });
+    return NextResponse.json({ userId, defaultPropertyId: activeAccess.propertyId, hasPin });
   } catch (error) {
     if (error instanceof AppError) {
       return NextResponse.json({ code: error.code, message: error.message, ...(error.details ?? {}) }, { status: error.statusCode });

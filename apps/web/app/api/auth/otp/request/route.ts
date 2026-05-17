@@ -40,7 +40,7 @@ export async function POST(req: Request) {
       throw new AppError('OTP_RATE_LIMITED', 'Please wait 60 seconds before requesting another OTP.', 429);
     }
 
-    const otp = String(Math.floor(Math.random() * 10_000)).padStart(4, '0');
+    const otp = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0');
     const otpHash = await hash(otp, 10);
     const provider = await getOtpProvider();
     const providerResult = await provider.sendOtp(body.phone);

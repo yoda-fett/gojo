@@ -25,6 +25,8 @@ const seedDir = path.dirname(fileURLToPath(import.meta.url));
 loadEnv(path.join(seedDir, '..', '.env'));
 loadEnv(path.join(seedDir, '..', '..', '..', '.env'));
 
+import { hash } from 'bcryptjs';
+
 import { PrismaClient } from '../src/generated/client/index.js';
 
 const prisma = new PrismaClient();
@@ -52,13 +54,21 @@ async function main() {
   const propertyId = 'seed-property-1';
   const ownerId = 'seed-user-1';
   const managerId = 'seed-user-2';
+  const housekeeperId = 'seed-user-3';
   const standardRoomTypeId = 'seed-room-type-standard';
   const deluxeRoomTypeId = 'seed-room-type-deluxe';
   const flexRoomTypeId = 'seed-room-type-family';
 
+  const propertyProfile = {
+    numberOfFloors: 3,
+    defaultCheckInTime: '14:00',
+    defaultCheckOutTime: '11:00',
+    laundryVendorName: 'CleanPress Laundry',
+    laundryVendorContact: '+919845012345',
+  };
   await prisma.property.upsert({
     where: { slug: 'test-hotel' },
-    update: {},
+    update: propertyProfile,
     create: {
       id: propertyId,
       name: 'Test Hotel',
@@ -67,6 +77,7 @@ async function main() {
       city: 'Bengaluru',
       state: 'Karnataka',
       pincode: '560001',
+      ...propertyProfile,
     },
   });
 
@@ -77,7 +88,6 @@ async function main() {
       maxOccupancy: 2,
       baseRate: '4500.00',
       floorRate: '4000.00',
-      ceilingRate: '6500.00',
       gstSlab: '12%',
       amenities: ['WiFi'],
     },
@@ -87,7 +97,6 @@ async function main() {
       maxOccupancy: 3,
       baseRate: '8000.00',
       floorRate: '7600.00',
-      ceilingRate: '9800.00',
       gstSlab: '18%',
       amenities: ['WiFi', 'Balcony'],
     },
@@ -97,11 +106,10 @@ async function main() {
       maxOccupancy: 4,
       baseRate: '10500.00',
       floorRate: '9500.00',
-      ceilingRate: '13500.00',
       gstSlab: '18%',
       amenities: ['WiFi', 'Balcony', 'Breakfast'],
     },
-  ] as const) {
+  ]) {
     await prisma.roomType.upsert({
       where: { propertyId_name: { propertyId, name: roomType.name } },
       update: roomType,
@@ -206,14 +214,17 @@ async function main() {
     });
   }
 
+  // PIN for the housekeeping companion app (phone + 4-digit PIN auth).
+  const hkPinHash = await hash('1234', 10);
   for (const user of [
-    { id: ownerId, phone: '+911234567890', name: 'Seed Owner' },
-    { id: managerId, phone: '+919999888877', name: 'Priya Manager' },
-  ] as const) {
+    { id: ownerId, phone: '+911234567890', name: 'Seed Owner', pinHash: null as string | null },
+    { id: managerId, phone: '+919999888877', name: 'Priya Manager', pinHash: null as string | null },
+    { id: housekeeperId, phone: '+919800000001', name: 'Reema Housekeeper', pinHash: hkPinHash },
+  ]) {
     await prisma.user.upsert({
       where: { phone: user.phone },
-      update: { name: user.name },
-      create: user,
+      update: { name: user.name, pinHash: user.pinHash },
+      create: { id: user.id, phone: user.phone, name: user.name, pinHash: user.pinHash },
     });
   }
 
@@ -242,6 +253,82 @@ async function main() {
       invitedBy: ownerId,
     },
   });
+
+  // ─── Housekeeping staff access (housekeeping companion app) ───
+  await prisma.propertyAccess.upsert({
+    where: { propertyId_userId: { propertyId, userId: housekeeperId } },
+    update: { role: 'HOUSEKEEPING', status: 'ACTIVE', revokedAt: null, deletedAt: null },
+    create: {
+      id: 'seed-access-3',
+      propertyId,
+      userId: housekeeperId,
+      role: 'HOUSEKEEPING',
+      status: 'ACTIVE',
+      invitedAt: new Date('2026-04-10T00:00:00.000Z'),
+      invitedBy: ownerId,
+    },
+  });
+
+  // Housekeeping catalog — amenities (per room type) + linens (property-wide).
+  const AMENITY_ITEMS = [
+    { id: 'cat-water-std', roomTypeId: standardRoomTypeId, name: 'Drinking Water (1L)', unit: 'bottle', expectedQtyPerStay: 2, restockThreshold: 10 },
+    { id: 'cat-toiletry-std', roomTypeId: standardRoomTypeId, name: 'Toiletry Kit', unit: 'kit', expectedQtyPerStay: 1, restockThreshold: 8 },
+    { id: 'cat-water-dlx', roomTypeId: deluxeRoomTypeId, name: 'Drinking Water (1L)', unit: 'bottle', expectedQtyPerStay: 3, restockThreshold: 10 },
+    { id: 'cat-toiletry-dlx', roomTypeId: deluxeRoomTypeId, name: 'Toiletry Kit', unit: 'kit', expectedQtyPerStay: 2, restockThreshold: 8 },
+    { id: 'cat-water-fam', roomTypeId: flexRoomTypeId, name: 'Drinking Water (1L)', unit: 'bottle', expectedQtyPerStay: 4, restockThreshold: 10 },
+    { id: 'cat-toiletry-fam', roomTypeId: flexRoomTypeId, name: 'Toiletry Kit', unit: 'kit', expectedQtyPerStay: 2, restockThreshold: 8 },
+  ];
+  for (const item of AMENITY_ITEMS) {
+    await prisma.catalogItem.upsert({
+      where: { id: item.id },
+      update: { name: item.name, unit: item.unit, roomTypeId: item.roomTypeId, expectedQtyPerStay: item.expectedQtyPerStay, restockThreshold: item.restockThreshold, deletedAt: null },
+      create: { id: item.id, propertyId, itemType: 'AMENITY', roomTypeId: item.roomTypeId, name: item.name, unit: item.unit, expectedQtyPerStay: item.expectedQtyPerStay, restockThreshold: item.restockThreshold },
+    });
+  }
+
+  const LINEN_ITEMS = [
+    { id: 'cat-bath-towel', name: 'Bath Towel', unit: 'piece', totalOwned: 120, minPoolSize: 30 },
+    { id: 'cat-bed-sheet', name: 'Bed Sheet', unit: 'piece', totalOwned: 90, minPoolSize: 24 },
+    { id: 'cat-pillow-cover', name: 'Pillow Cover', unit: 'piece', totalOwned: 160, minPoolSize: 40 },
+  ];
+  for (const item of LINEN_ITEMS) {
+    await prisma.catalogItem.upsert({
+      where: { id: item.id },
+      update: { name: item.name, unit: item.unit, totalOwned: item.totalOwned, minPoolSize: item.minPoolSize, linenCategory: 'ROUTINE', deletedAt: null },
+      create: { id: item.id, propertyId, itemType: 'LINEN', name: item.name, unit: item.unit, totalOwned: item.totalOwned, minPoolSize: item.minPoolSize, linenCategory: 'ROUTINE' },
+    });
+  }
+
+  // Today's room assignments for the housekeeping staff — the DIRTY rooms,
+  // plus per-room consumable + linen state so refill / linen-swap tasks have content.
+  const HK_ASSIGNMENTS = [
+    { id: 'seed-assign-102', roomId: 'room-102', roomTypeId: standardRoomTypeId },
+    { id: 'seed-assign-103', roomId: 'room-103', roomTypeId: standardRoomTypeId },
+    { id: 'seed-assign-204', roomId: 'room-204', roomTypeId: deluxeRoomTypeId },
+    { id: 'seed-assign-302', roomId: 'room-302', roomTypeId: flexRoomTypeId },
+    { id: 'seed-assign-305', roomId: 'room-305', roomTypeId: flexRoomTypeId },
+  ];
+  for (const a of HK_ASSIGNMENTS) {
+    await prisma.roomAssignment.upsert({
+      where: { id: a.id },
+      update: { staffUserId: housekeeperId, assignedDate: todayDate, taskTypes: ['CLEAN', 'REFILL', 'STANDARD_LAUNDRY'], deletedAt: null },
+      create: { id: a.id, propertyId, roomId: a.roomId, staffUserId: housekeeperId, assignedDate: todayDate, assignedBy: managerId, taskTypes: ['CLEAN', 'REFILL', 'STANDARD_LAUNDRY'] },
+    });
+    for (const item of AMENITY_ITEMS.filter((i) => i.roomTypeId === a.roomTypeId)) {
+      await prisma.roomConsumableState.upsert({
+        where: { propertyId_roomId_catalogItemId: { propertyId, roomId: a.roomId, catalogItemId: item.id } },
+        update: { currentQty: 1 },
+        create: { propertyId, roomId: a.roomId, catalogItemId: item.id, currentQty: 1, lastRefillAt: SEED_EPOCH },
+      });
+    }
+    for (const item of LINEN_ITEMS) {
+      await prisma.roomLinenState.upsert({
+        where: { propertyId_roomId_catalogItemId: { propertyId, roomId: a.roomId, catalogItemId: item.id } },
+        update: { qty: 2 },
+        create: { propertyId, roomId: a.roomId, catalogItemId: item.id, qty: 2, lastObservedAt: SEED_EPOCH },
+      });
+    }
+  }
 
   await prisma.subscription.upsert({
     where: { propertyId },
@@ -519,12 +606,16 @@ async function main() {
 
 main()
   .then(async () => {
-    const [rooms, accesses, blocks] = await Promise.all([
+    const [rooms, accesses, blocks, assignments, catalog] = await Promise.all([
       prisma.room.count({ where: { propertyId: 'seed-property-1' } }),
       prisma.propertyAccess.count({ where: { propertyId: 'seed-property-1' } }),
       prisma.roomBlock.count({ where: { propertyId: 'seed-property-1', deletedAt: null } }),
+      prisma.roomAssignment.count({ where: { propertyId: 'seed-property-1', deletedAt: null } }),
+      prisma.catalogItem.count({ where: { propertyId: 'seed-property-1', deletedAt: null } }),
     ]);
-    console.log(`[seed] done — rooms=${rooms} propertyAccess=${accesses} activeBlocks=${blocks}`);
+    console.log(
+      `[seed] done — rooms=${rooms} propertyAccess=${accesses} activeBlocks=${blocks} roomAssignments=${assignments} catalogItems=${catalog}`,
+    );
   })
   .catch((error) => {
     console.error('[seed] FAILED');

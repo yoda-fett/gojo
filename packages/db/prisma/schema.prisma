@@ -27,6 +27,21 @@ model Property {
   directBookingEnabled    Boolean @default(false) @map("direct_booking_enabled")
   bookingSlug             String?  @unique @map("booking_slug")
   averageOtaCommissionRate Float  @default(0.18) @map("average_ota_commission_rate")
+  laundryVendorName     String?  @map("laundry_vendor_name") @db.VarChar(80)
+  laundryVendorContact  String?  @map("laundry_vendor_contact")
+  numberOfFloors       Int?     @map("number_of_floors")
+  defaultCheckInTime   String?  @map("default_check_in_time")  @db.VarChar(5) // "HH:MM" 24h
+  defaultCheckOutTime  String?  @map("default_check_out_time") @db.VarChar(5) // "HH:MM" 24h
+  contactPhone         String?  @map("contact_phone")  @db.VarChar(20)
+  contactEmail         String?  @map("contact_email")  @db.VarChar(120)
+  pan                  String?  @map("pan")            @db.VarChar(10)
+  stateCode            String?  @map("state_code")     @db.VarChar(2)
+  currency             String   @default("INR")          @db.VarChar(3)
+  timezone             String   @default("Asia/Kolkata")
+  coldStartCompletedAt DateTime? @map("cold_start_completed_at")
+  coldStartProgress    Json?     @map("cold_start_progress") // { lastCompletedStep: number, drafts?: {...}, skipped?: boolean }
+  coldStartLinenDeferred Boolean? @default(false) @map("cold_start_linen_deferred")
+  firstShiftReconciledAt DateTime? @map("first_shift_reconciled_at")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
   deletedAt           DateTime? @map("deleted_at")
@@ -43,7 +58,6 @@ model RoomType {
   maxOccupancy Int      @map("max_occupancy")
   baseRate     Decimal  @db.Decimal(10, 2) @map("base_rate")
   floorRate    Decimal  @db.Decimal(10, 2) @map("floor_rate")
-  ceilingRate  Decimal? @db.Decimal(10, 2) @map("ceiling_rate")
   gstSlab      String   @map("gst_slab")
   amenities    String[]
   stateVersion Int      @default(0) @map("state_version")
@@ -66,6 +80,8 @@ model Room {
   holdRef       String?  @map("hold_ref")
   stateVersion  Int      @default(0) @map("state_version")
   notes         String?
+  accessible    Boolean  @default(false)
+  connectingRoomId String? @map("connecting_room_id")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
@@ -172,18 +188,28 @@ model Guest {
 }
 
 model Subscription {
-  id              String   @id @default(cuid())
-  propertyId      String   @map("property_id")
-  planKey         String   @map("plan_key")
-  status          String
-  trialStartedAt  DateTime? @map("trial_started_at")
-  trialEndsAt     DateTime? @map("trial_ends_at")
-  gracePeriodDays Int      @default(7) @map("grace_period_days")
-  stateVersion    Int      @default(0) @map("state_version")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  deletedAt       DateTime? @map("deleted_at")
-  deletedBy       String?  @map("deleted_by")
+  id                 String    @id @default(cuid())
+  propertyId         String    @map("property_id")
+  planKey            String    @map("plan_key")
+  tier               String    @default("TRIAL")
+  status             String
+  trialStartedAt     DateTime? @map("trial_started_at")
+  trialEndsAt        DateTime? @map("trial_ends_at")
+  currentPeriodStart DateTime? @map("current_period_start")
+  currentPeriodEnd     DateTime? @map("current_period_end")
+  billingCadence       String    @default("MONTHLY") @map("billing_cadence")
+  pendingDowngradeTier String?   @map("pending_downgrade_tier")
+  pendingDowngradeAt   DateTime? @map("pending_downgrade_at")
+  gracePeriodDays    Int       @default(7) @map("grace_period_days")
+  stateVersion       Int       @default(0) @map("state_version")
+  suspendedAt        DateTime? @map("suspended_at")
+  pausedAt           DateTime? @map("paused_at")
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancellationReason String?   @map("cancellation_reason")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+  deletedBy          String?   @map("deleted_by")
 
   @@unique([propertyId])
   @@index([propertyId, status])
@@ -213,12 +239,258 @@ model User {
   id        String   @id @default(cuid())
   phone     String   @unique
   name      String?
+  pinHash   String?  @map("pin_hash")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
   deletedBy String?  @map("deleted_by")
 
   @@map("users")
+}
+
+model CatalogItem {
+  id                 String    @id @default(cuid())
+  propertyId         String    @map("property_id")
+  itemType           String    @map("item_type")
+  name               String
+  unit               String    @db.VarChar(32)
+  roomTypeId         String?   @map("room_type_id")
+  expectedQtyPerStay Int?      @map("expected_qty_per_stay")
+  restockThreshold   Int?      @map("restock_threshold")
+  linenCategory      String?   @map("linen_category")
+  totalOwned         Int?      @map("total_owned")
+  minPoolSize        Int?      @map("min_pool_size")
+  stateVersion       Int       @default(0) @map("state_version")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+  deletedBy          String?   @map("deleted_by")
+
+  @@index([propertyId, itemType])
+  @@index([propertyId, roomTypeId])
+  @@map("catalog_items")
+}
+
+model RoomAssignment {
+  id            String    @id @default(cuid())
+  propertyId    String    @map("property_id")
+  roomId        String    @map("room_id")
+  staffUserId   String    @map("staff_user_id")
+  assignedDate  DateTime  @db.Date @map("assigned_date")
+  assignedBy    String    @map("assigned_by")
+  taskTypes     String[]  @map("task_types")
+  stateVersion  Int       @default(0) @map("state_version")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     String?   @map("deleted_by")
+
+  @@index([propertyId, assignedDate])
+  @@index([staffUserId, assignedDate])
+  @@index([propertyId, roomId, assignedDate])
+  @@map("room_assignments")
+}
+
+model RoomConsumableState {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  roomId        String   @map("room_id")
+  catalogItemId String   @map("catalog_item_id")
+  currentQty    Int      @default(0) @map("current_qty")
+  lastRefillAt  DateTime? @map("last_refill_at")
+  stateVersion  Int      @default(0) @map("state_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     String?  @map("deleted_by")
+
+  @@unique([propertyId, roomId, catalogItemId])
+  @@index([propertyId, roomId])
+  @@map("room_consumable_states")
+}
+
+model ConsumptionLog {
+  id                    String   @id @default(cuid())
+  propertyId            String   @map("property_id")
+  roomId                String   @map("room_id")
+  reservationId         String?  @map("reservation_id")
+  assignmentId          String?  @map("assignment_id")
+  catalogItemId         String   @map("catalog_item_id")
+  qtyAddedToReachPar    Int      @map("qty_added_to_reach_par")
+  qtyUsed               Int      @map("qty_used")
+  createdBy             String   @map("created_by")
+  evidence              Json?
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@index([propertyId, roomId, createdAt])
+  @@index([propertyId, catalogItemId, createdAt])
+  @@map("consumption_logs")
+}
+
+model InventoryRestock {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  catalogItemId String   @map("catalog_item_id")
+  qtyAdded      Int      @map("qty_added")
+  reference     String?  @db.VarChar(120)
+  recordedBy    String   @map("recorded_by")
+  recordedAt    DateTime @default(now()) @map("recorded_at")
+
+  @@index([propertyId, catalogItemId, recordedAt])
+  @@map("inventory_restocks")
+}
+
+model ConsumableWriteOff {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  catalogItemId String   @map("catalog_item_id")
+  qty           Int
+  reason        String   @db.VarChar(280)
+  source        String   @default("OWNER_INITIATED")
+  issueReportId String?  @map("issue_report_id")
+  recordedBy    String   @map("recorded_by")
+  recordedAt    DateTime @default(now()) @map("recorded_at")
+
+  @@index([propertyId, catalogItemId, recordedAt])
+  @@index([propertyId, issueReportId])
+  @@map("consumable_write_offs")
+}
+
+model RoomLinenState {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  roomId        String   @map("room_id")
+  catalogItemId String   @map("catalog_item_id")
+  qty           Int      @default(0)
+  stateVersion  Int      @default(0) @map("state_version")
+  lastObservedAt DateTime? @map("last_observed_at")
+  seedSource    String?  @map("seed_source") // 'COLD_START' | 'HOUSEKEEPING_SWEEP' | 'MANUAL_ADJUSTMENT'
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     String?  @map("deleted_by")
+
+  @@unique([propertyId, roomId, catalogItemId])
+  @@index([propertyId, roomId])
+  @@map("room_linen_states")
+}
+
+model LinenArrival {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  catalogItemId String   @map("catalog_item_id")
+  qtyAdded      Int      @map("qty_added")
+  reference     String?  @db.VarChar(120)
+  recordedBy    String   @map("recorded_by")
+  recordedAt    DateTime @default(now()) @map("recorded_at")
+
+  @@index([propertyId, catalogItemId, recordedAt])
+  @@map("linen_arrivals")
+}
+
+model LinenWriteOff {
+  id             String   @id @default(cuid())
+  propertyId     String   @map("property_id")
+  catalogItemId  String   @map("catalog_item_id")
+  qty            Int
+  reason         String   @db.VarChar(280)
+  sourceLocation String   @default("STORAGE") @map("source_location")
+  laundryLogId   String?  @map("laundry_log_id")
+  issueReportId  String?  @map("issue_report_id")
+  recordedBy     String   @map("recorded_by")
+  recordedAt     DateTime @default(now()) @map("recorded_at")
+
+  @@index([propertyId, catalogItemId, recordedAt])
+  @@index([propertyId, issueReportId])
+  @@index([propertyId, laundryLogId])
+  @@map("linen_write_offs")
+}
+
+model LaundryLog {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  roomId        String?  @map("room_id")
+  assignmentId  String?  @map("assignment_id")
+  state         String
+  createdByRole String   @map("created_by_role")
+  createdByUserId String @map("created_by_user_id")
+  linenCategory String?  @map("linen_category")
+  cycleDate     DateTime @db.Date @map("cycle_date")
+  evidence      Json?
+  closedAt      DateTime? @map("closed_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     String?  @map("deleted_by")
+
+  @@index([propertyId, state, cycleDate])
+  @@index([propertyId, roomId, state])
+  @@map("laundry_logs")
+}
+
+model LaundryLogItem {
+  id                    String   @id @default(cuid())
+  propertyId            String   @map("property_id")
+  laundryLogId          String   @map("laundry_log_id")
+  sourceLaundryLogItemId String? @map("source_laundry_log_item_id")
+  catalogItemId         String   @map("catalog_item_id")
+  state                 String
+  qty                   Int
+  remainingQty          Int      @default(0) @map("remaining_qty")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  @@index([propertyId, catalogItemId, state])
+  @@index([propertyId, laundryLogId])
+  @@index([sourceLaundryLogItemId])
+  @@map("laundry_log_items")
+}
+
+model PendingReview {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  reviewType    String   @map("review_type")
+  status        String   @default("PENDING")
+  roomId        String?  @map("room_id")
+  catalogItemId String?  @map("catalog_item_id")
+  laundryLogItemId String? @map("laundry_log_item_id")
+  qty           Int?
+  reason        String?
+  metadata      Json?
+  createdBy     String   @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  resolvedAt    DateTime? @map("resolved_at")
+  resolvedBy    String?  @map("resolved_by")
+
+  @@index([propertyId, status, createdAt])
+  @@index([propertyId, reviewType, status])
+  @@map("pending_reviews")
+}
+
+model IssueReport {
+  id                String   @id @default(cuid())
+  propertyId        String   @map("property_id")
+  entryContext      String   @map("entry_context")
+  category          String
+  attributionStream String   @map("attribution_stream")
+  roomId            String?  @map("room_id")
+  catalogItemId     String?  @map("catalog_item_id")
+  qty               Int?
+  vendorName        String?  @map("vendor_name") @db.VarChar(80)
+  voiceFileUrl      String?  @map("voice_file_url")
+  photoFileUrl      String?  @map("photo_file_url")
+  textNote          String?  @map("text_note") @db.VarChar(280)
+  reportedBy        String   @map("reported_by")
+  reportedAt        DateTime @default(now()) @map("reported_at")
+  status            String   @default("PENDING_REVIEW")
+  reviewedBy        String?  @map("reviewed_by")
+  reviewedAt        DateTime? @map("reviewed_at")
+  rejectReason      String?  @map("reject_reason")
+  stateVersion      Int      @default(0) @map("state_version")
+  deletedAt         DateTime? @map("deleted_at")
+  deletedBy         String?  @map("deleted_by")
+
+  @@index([propertyId, status, attributionStream])
+  @@index([propertyId, reportedAt])
+  @@map("issue_reports")
 }
 
 model OtpSession {
@@ -271,6 +543,26 @@ model RatePlan {
   @@unique([propertyId, roomTypeId, name])
   @@index([propertyId, roomTypeId])
   @@map("rate_plans")
+}
+
+// Story 12.7f. Seasonal date-range OR channel-name multiplier scaling the
+// resolved rate-plan price; result is always floor-clamped at quote time.
+model RateMultiplier {
+  id            String   @id @default(cuid())
+  propertyId    String   @map("property_id")
+  name          String
+  type          String   // 'SEASONAL' | 'CHANNEL'
+  multiplier    Decimal  @db.Decimal(6, 4)
+  startDate     DateTime? @map("start_date")
+  endDate       DateTime? @map("end_date")
+  channel       String?
+  roomTypeIds   String[] @map("room_type_ids") // empty = all room types
+  createdAt     DateTime @default(now()) @map("created_at")
+  deletedAt     DateTime? @map("deleted_at")
+  deletedBy     String?  @map("deleted_by")
+
+  @@index([propertyId, type])
+  @@map("rate_multipliers")
 }
 
 model Alert {
@@ -415,6 +707,8 @@ model Channel {
   webhookEndpoint String    @map("webhook_endpoint")
   connectedBy     String    @map("connected_by")
   connectedAt     DateTime  @default(now()) @map("connected_at")
+  pausedAt        DateTime? @map("paused_at")
+  pausedReason    String?   @map("paused_reason")
   deletedAt       DateTime? @map("deleted_at")
   deletedBy       String?   @map("deleted_by")
 
@@ -478,6 +772,21 @@ model PendingPayment {
   @@index([propertyId, status])
   @@index([holdId])
   @@map("pending_payments")
+}
+
+model TrialNudgeRun {
+  id           String   @id @default(cuid())
+  propertyId   String   @map("property_id")
+  touchpointType String @map("touchpoint_type")
+  dayOffset    Int      @map("day_offset")
+  status       String   @default("SUCCESS")
+  providerMessageId String? @map("provider_message_id")
+  errorReason  String?  @map("error_reason")
+  ranAt        DateTime @default(now()) @map("ran_at")
+
+  @@unique([propertyId, touchpointType, dayOffset])
+  @@index([propertyId, ranAt])
+  @@map("trial_nudge_runs")
 }
 
 model NotificationLog {

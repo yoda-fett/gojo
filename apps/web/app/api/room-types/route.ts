@@ -19,9 +19,6 @@ export const GET = withAuth(async (_req, actor) => {
 
 export const POST = withAuth(async (req, actor) => {
   const body = roomTypeCreateSchema.parse(await req.json());
-  if (body.ceilingRate && body.floorRate > body.ceilingRate) {
-    throw new AppError('INVALID_RATE_RANGE', 'floorRate must be <= ceilingRate', 422);
-  }
 
   const created = await prisma.roomType.create({
     data: {

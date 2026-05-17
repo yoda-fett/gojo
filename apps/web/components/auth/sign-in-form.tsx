@@ -1,78 +1,124 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { Button } from '@/components/ui/button';
+type PropertyOption = {
+  propertyId: string;
+  propertyName: string;
+  role: string;
+};
 
-type VerifyResponse =
-  | {
-      userId: string;
-      defaultPropertyId?: string;
-      properties?: Array<{
-        propertyId: string;
-        propertyName: string;
-        role: string;
-      }>;
-    }
-  | {
-      code: string;
-      message: string;
-    };
+type VerifySuccess =
+  | { userId: string; defaultPropertyId: string; properties?: undefined; hasPin?: boolean }
+  | { userId: string; properties: PropertyOption[]; defaultPropertyId?: undefined; hasPin?: boolean };
+
+type VerifyError = { code: string; message: string };
+
+type Mode = 'idle' | 'otp' | 'pin' | 'select-property';
+
+const CODE_LENGTH = 6;
 
 function normalizePhone(digitsOnly: string) {
   return digitsOnly ? `+91${digitsOnly}` : '';
 }
 
-function displayPhone(value: string) {
-  if (!value) {
-    return '';
-  }
-
-  if (value.startsWith('+91') && value.length <= 13) {
-    const local = value.slice(3);
-    return `+91 ${local}`;
-  }
-
-  return value;
+function displayPhone(digits: string) {
+  if (digits.length !== 10) return digits;
+  return `+91 ${digits.slice(0, 5)} ${digits.slice(5)}`;
 }
 
 function sessionStorageKey(phone: string) {
   return `gojo:otp-session:${phone}`;
 }
 
+const DEVICE_HINT_KEY = 'gojo:signin:device';
+const DEVICE_HINT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+type DeviceHint = { phone: string; hasPin: boolean; ts: number };
+
+function readDeviceHint(): DeviceHint | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(DEVICE_HINT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DeviceHint;
+    if (!parsed.phone || typeof parsed.ts !== 'number') return null;
+    if (Date.now() - parsed.ts > DEVICE_HINT_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeDeviceHint(phone: string, hasPin: boolean) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      DEVICE_HINT_KEY,
+      JSON.stringify({ phone, hasPin, ts: Date.now() } satisfies DeviceHint),
+    );
+  } catch {
+    /* ignore quota errors */
+  }
+}
+
+function clearDeviceHint() {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(DEVICE_HINT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function SignInForm() {
   const router = useRouter();
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [mode, setMode] = useState<Mode>('idle');
   const [phoneDigits, setPhoneDigits] = useState('');
   const [sessionId, setSessionId] = useState('');
-  const [otp, setOtp] = useState('');
+  const [codeDigits, setCodeDigits] = useState<string[]>(() => Array(CODE_LENGTH).fill(''));
+  const [properties, setProperties] = useState<PropertyOption[]>([]);
+  const [selectingPropertyId, setSelectingPropertyId] = useState<string | null>(null);
+  const [postLoginHasPin, setPostLoginHasPin] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const codeInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const normalizedPhone = useMemo(() => normalizePhone(phoneDigits), [phoneDigits]);
   const phoneReady = phoneDigits.length === 10;
-  const otpReady = otp.trim().length >= 4;
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !phoneReady) {
-      return;
-    }
-
-    const existingSessionId = window.sessionStorage.getItem(sessionStorageKey(normalizedPhone));
-    if (existingSessionId) {
-      setSessionId(existingSessionId);
-    }
+    if (typeof window === 'undefined' || !phoneReady) return;
+    const existing = window.sessionStorage.getItem(sessionStorageKey(normalizedPhone));
+    if (existing) setSessionId(existing);
   }, [normalizedPhone, phoneReady]);
+
+  useEffect(() => {
+    const hint = readDeviceHint();
+    if (!hint?.hasPin) return;
+    const localDigits = hint.phone.startsWith('+91') ? hint.phone.slice(3) : hint.phone;
+    if (localDigits.length !== 10) return;
+    setPhoneDigits(localDigits);
+    setInfo('Welcome back — enter your PIN to continue.');
+    void startPinForPhone(`+91${localDigits}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (mode === 'otp' || mode === 'pin') {
+      codeInputRefs.current[0]?.focus();
+    }
+  }, [mode]);
 
   async function requestOtp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!phoneReady) {
-      setError('Enter a valid mobile number to continue.');
+      setError('Enter a valid 10-digit mobile number.');
       return;
     }
-
     setSubmitting(true);
     setError(null);
     setInfo(null);
@@ -82,7 +128,6 @@ export function SignInForm() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone: normalizedPhone }),
     });
-
     const payload = await response.json();
     setSubmitting(false);
 
@@ -95,22 +140,58 @@ export function SignInForm() {
     if (typeof window !== 'undefined') {
       window.sessionStorage.setItem(sessionStorageKey(normalizedPhone), payload.sessionId);
     }
-    setStep('otp');
+    setMode('otp');
+    setCodeDigits(Array(CODE_LENGTH).fill(''));
     setInfo(
       payload.reusedExistingSession
-        ? 'A recent OTP is still active for this number. In local development, use 1234.'
-        : 'Code sent. In local development, use 1234.',
+        ? 'A recent code is still active for this number.'
+        : 'Code sent. In local development, use 123456.',
     );
   }
 
-  async function verifyOtp(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!otpReady) {
-      setError('Enter the 4-digit OTP to continue.');
+  async function startPinForPhone(phone: string) {
+    setSubmitting(true);
+    setError(null);
+
+    const response = await fetch('/api/auth/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+    const payload = await response.json();
+    setSubmitting(false);
+
+    if (!response.ok) {
+      setError(payload.message ?? 'Unable to look up that number.');
+      return;
+    }
+    if (!payload.registered) {
+      clearDeviceHint();
+      setError('No account found for this number. Use OTP to sign in.');
+      return;
+    }
+    if (!payload.hasPin) {
+      clearDeviceHint();
+      setError('No PIN is set for this account. Use OTP to sign in.');
       return;
     }
 
-    setSubmitting(true);
+    setMode('pin');
+    setCodeDigits(Array(CODE_LENGTH).fill(''));
+  }
+
+  async function startPin() {
+    if (!phoneReady) {
+      setError('Enter a valid 10-digit mobile number first.');
+      return;
+    }
+    setInfo(null);
+    await startPinForPhone(normalizedPhone);
+  }
+
+  async function verifyOtp(code: string) {
+    if (verifying) return;
+    setVerifying(true);
     setError(null);
     setInfo(null);
 
@@ -118,131 +199,339 @@ export function SignInForm() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ sessionId, otp: otp.trim() }),
+      body: JSON.stringify({ sessionId, otp: code }),
     });
-
-    const payload = (await response.json()) as VerifyResponse;
-    setSubmitting(false);
+    const payload = (await response.json()) as VerifySuccess | VerifyError;
+    setVerifying(false);
 
     if (!response.ok) {
-      setError('message' in payload ? payload.message : 'Unable to verify OTP.');
+      setError('message' in payload ? payload.message : 'Unable to verify code.');
+      setCodeDigits(Array(CODE_LENGTH).fill(''));
+      codeInputRefs.current[0]?.focus();
       return;
     }
 
     if (typeof window !== 'undefined') {
       window.sessionStorage.removeItem(sessionStorageKey(normalizedPhone));
     }
+    writeDeviceHint(normalizedPhone, false);
+    const hasPin = 'hasPin' in payload ? Boolean(payload.hasPin) : true;
+    setPostLoginHasPin(hasPin);
 
     if ('properties' in payload && payload.properties && payload.properties.length > 1) {
-      setInfo(`Signed in. Opening ${payload.properties[0]?.propertyName ?? 'your property'} for now.`);
+      setProperties(payload.properties);
+      setMode('select-property');
+      return;
+    }
+
+    const dest = hasPin ? '/dashboard' : '/set-pin';
+    router.push(dest);
+    router.refresh();
+  }
+
+  async function verifyPin(pin: string) {
+    if (verifying) return;
+    setVerifying(true);
+    setError(null);
+    setInfo(null);
+
+    const response = await fetch('/api/auth/pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ phone: normalizedPhone, pin }),
+    });
+    const payload = (await response.json()) as VerifySuccess | VerifyError;
+    setVerifying(false);
+
+    if (!response.ok) {
+      setError('message' in payload ? payload.message : 'Unable to verify PIN.');
+      setCodeDigits(Array(CODE_LENGTH).fill(''));
+      codeInputRefs.current[0]?.focus();
+      return;
+    }
+
+    writeDeviceHint(normalizedPhone, true);
+
+    if ('properties' in payload && payload.properties && payload.properties.length > 1) {
+      setProperties(payload.properties);
+      setMode('select-property');
+      return;
     }
 
     router.push('/dashboard');
     router.refresh();
   }
 
-  return (
-    <div className="gojo-auth-layout">
-      <section className="gojo-auth-card gojo-auth-content">
-        <p className="gojo-eyebrow">Gojo Access</p>
-        <h1>{step === 'phone' ? 'Sign in with your mobile number' : 'Enter your verification code'}</h1>
-        <p className="gojo-copy">
-          {step === 'phone'
-            ? 'Use your registered staff number to access the owner dashboard, bookings, and operating tools.'
-            : `We sent a code to ${displayPhone(normalizedPhone)}. Enter it below to start your shift.`}
-        </p>
+  function handleCodeChange(index: number, raw: string) {
+    const digit = raw.replace(/\D/g, '').slice(-1);
+    setCodeDigits((prev) => {
+      const next = [...prev];
+      next[index] = digit;
+      const joined = next.join('');
+      if (digit && index < CODE_LENGTH - 1) {
+        codeInputRefs.current[index + 1]?.focus();
+      }
+      if (joined.length === CODE_LENGTH && next.every((d) => d !== '')) {
+        if (mode === 'otp') void verifyOtp(joined);
+        else if (mode === 'pin') void verifyPin(joined);
+      }
+      return next;
+    });
+  }
 
-        {step === 'phone' ? (
-          <form className="gojo-auth-form" onSubmit={requestOtp}>
-            <label className="gojo-auth-field">
-              <span>Mobile Number</span>
-              <div className="gojo-auth-phone-input">
-                <span className="gojo-auth-phone-prefix" aria-label="Country code +91">
-                  +91
-                </span>
+  function handleCodeKeyDown(index: number, event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Backspace' && !codeDigits[index] && index > 0) {
+      codeInputRefs.current[index - 1]?.focus();
+    }
+  }
+
+  function handleCodePaste(event: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = event.clipboardData.getData('text').replace(/\D/g, '').slice(0, CODE_LENGTH);
+    if (!pasted) return;
+    event.preventDefault();
+    const next = Array(CODE_LENGTH).fill('').map((_, i) => pasted[i] ?? '');
+    setCodeDigits(next);
+    const lastIndex = Math.min(pasted.length, CODE_LENGTH) - 1;
+    codeInputRefs.current[lastIndex]?.focus();
+    if (pasted.length === CODE_LENGTH) {
+      if (mode === 'otp') void verifyOtp(pasted);
+      else if (mode === 'pin') void verifyPin(pasted);
+    }
+  }
+
+  function resetToPhone() {
+    setMode('idle');
+    setCodeDigits(Array(CODE_LENGTH).fill(''));
+    setSessionId('');
+    setError(null);
+    setInfo(null);
+    if (typeof window !== 'undefined' && normalizedPhone) {
+      window.sessionStorage.removeItem(sessionStorageKey(normalizedPhone));
+    }
+  }
+
+  function switchToOtpFromPin() {
+    setMode('idle');
+    setCodeDigits(Array(CODE_LENGTH).fill(''));
+    setError(null);
+    setInfo('Choose Get OTP to receive a fresh code.');
+  }
+
+  async function selectProperty(propertyId: string) {
+    if (selectingPropertyId) return;
+    setSelectingPropertyId(propertyId);
+    setError(null);
+
+    const response = await fetch('/api/auth/select-property', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ propertyId }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setError(payload.message ?? 'Unable to select that property.');
+      setSelectingPropertyId(null);
+      return;
+    }
+
+    const dest = postLoginHasPin ? '/dashboard' : '/set-pin';
+    router.push(dest);
+    router.refresh();
+  }
+
+  const heading =
+    mode === 'select-property'
+      ? 'Choose a property'
+      : mode === 'pin'
+        ? 'Enter your PIN'
+        : 'Sign in';
+
+  const subtitle =
+    mode === 'select-property'
+      ? 'You have access to multiple properties.'
+      : mode === 'otp'
+        ? `Enter the 4-digit code we sent to ${displayPhone(phoneDigits)}.`
+        : mode === 'pin'
+          ? `Enter your 4-digit PIN for ${displayPhone(phoneDigits)}.`
+          : 'Enter your phone number to get started.';
+
+  return (
+    <div className="signin-screen">
+      <aside className="signin-hero">
+        <div className="signin-hero-logo">Gojo</div>
+        <div className="signin-hero-tag">HOSPITALITY, SIMPLIFIED</div>
+        <h2>Manage your property with confidence</h2>
+        <p>Reservations, housekeeping, revenue and guest communications — in one calm, intuitive surface.</p>
+      </aside>
+
+      <main className="signin-pane">
+        <div className="signin-card">
+          <h3>{heading}</h3>
+          <p className="signin-subtitle">{subtitle}</p>
+
+          {mode === 'select-property' ? (
+            <div className="signin-prop-selector">
+              <span className="signin-section-label">Properties</span>
+              <ul className="signin-prop-list">
+                {properties.map((p) => {
+                  const isSelecting = selectingPropertyId === p.propertyId;
+                  return (
+                    <li key={p.propertyId}>
+                      <button
+                        type="button"
+                        className={`signin-prop-opt${isSelecting ? ' is-selecting' : ''}`}
+                        onClick={() => selectProperty(p.propertyId)}
+                        disabled={selectingPropertyId !== null}
+                      >
+                        <span className="signin-prop-radio" aria-hidden="true" />
+                        <span className="signin-prop-name">{p.propertyName}</span>
+                        <span className="signin-prop-meta">{p.role}{isSelecting ? ' · Opening…' : ''}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : (
+            <form className="signin-form" onSubmit={requestOtp}>
+              <label htmlFor="phoneLocalInput">Phone number</label>
+              <div className="signin-phone-row">
+                <div className="signin-prefix" aria-hidden="true">+91</div>
                 <input
+                  id="phoneLocalInput"
                   type="tel"
                   inputMode="numeric"
                   autoComplete="tel-national"
                   placeholder="98765 43210"
                   maxLength={10}
                   value={phoneDigits}
-                  onChange={(event) => setPhoneDigits(event.target.value.replace(/\D/g, '').slice(0, 10))}
+                  disabled={mode === 'otp' || mode === 'pin'}
+                  onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 />
               </div>
-            </label>
-            <Button type="submit" disabled={submitting || !phoneReady} className="gojo-auth-submit">
-              {submitting ? 'Sending code...' : 'Get OTP'}
-            </Button>
-            {sessionId ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setError(null);
-                  setInfo('Continuing with your active OTP session.');
-                  setStep('otp');
-                }}
-              >
-                I already have a code
-              </Button>
-            ) : null}
-          </form>
-        ) : (
-          <form className="gojo-auth-form" onSubmit={verifyOtp}>
-            <label className="gojo-auth-field">
-              <span>One-Time Password</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                placeholder="1234"
-                value={otp}
-                onChange={(event) => setOtp(event.target.value.replace(/\D/g, ''))}
-              />
-            </label>
-            <div className="gojo-auth-actions">
-              <Button type="submit" disabled={submitting || !otpReady} className="gojo-auth-submit">
-                {submitting ? 'Verifying...' : 'Verify OTP'}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setStep('phone');
-                  setOtp('');
-                  setInfo(null);
-                  setError(null);
-                }}
-              >
-                Change Number
-              </Button>
-            </div>
-          </form>
-        )}
+              {mode === 'idle' ? (
+                <div className="signin-helper">We&apos;ll send a 4-digit code to this number.</div>
+              ) : null}
 
-        {info ? <p className="gojo-auth-message gojo-auth-message-info">{info}</p> : null}
-        {error ? <p className="gojo-auth-message gojo-auth-message-error">{error}</p> : null}
+              {mode === 'otp' || mode === 'pin' ? (
+                <div className="signin-otp-pin">
+                  <span className="signin-section-label">
+                    {mode === 'pin' ? 'PIN' : 'Verification code'}
+                  </span>
+                  <div className={`signin-digits${verifying ? ' is-verifying' : ''}`} role="group" aria-label={mode === 'pin' ? '4-digit PIN' : '4-digit verification code'}>
+                    {codeDigits.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={(el) => {
+                          codeInputRefs.current[index] = el;
+                        }}
+                        type={mode === 'pin' ? 'password' : 'text'}
+                        inputMode="numeric"
+                        autoComplete={mode === 'pin' ? 'current-password' : index === 0 ? 'one-time-code' : 'off'}
+                        maxLength={1}
+                        value={digit}
+                        disabled={verifying}
+                        aria-label={`Digit ${index + 1}`}
+                        className={`signin-digit${digit ? ' is-filled' : ''}`}
+                        onChange={(e) => handleCodeChange(index, e.target.value)}
+                        onKeyDown={(e) => handleCodeKeyDown(index, e)}
+                        onPaste={index === 0 ? handleCodePaste : undefined}
+                        onFocus={(e) => e.currentTarget.select()}
+                      />
+                    ))}
+                  </div>
+                  <div className="signin-otp-helper">
+                    {verifying ? (
+                      <span className="signin-inline-verify"><span className="signin-spinner-dark" />Verifying…</span>
+                    ) : (
+                      'Auto-submits on the 4th digit.'
+                    )}
+                  </div>
+                </div>
+              ) : null}
 
-        <div className="gojo-auth-footnote">
-          <p>Local development uses the mock OTP provider.</p>
-          <strong>Use code 1234 after requesting an OTP.</strong>
+              <div className="signin-btn-group">
+                {mode === 'idle' ? (
+                  <>
+                    <button
+                      type="submit"
+                      className="signin-btn signin-btn-primary"
+                      disabled={submitting || !phoneReady}
+                    >
+                      {submitting ? 'Sending code…' : 'Get OTP'}
+                    </button>
+                    <div className="signin-link-row">
+                      or{' '}
+                      <a
+                        role="button"
+                        tabIndex={0}
+                        aria-disabled={!phoneReady || submitting}
+                        onClick={() => {
+                          if (!phoneReady || submitting) return;
+                          void startPin();
+                        }}
+                        onKeyDown={(e) => {
+                          if ((e.key === 'Enter' || e.key === ' ') && phoneReady && !submitting) {
+                            e.preventDefault();
+                            void startPin();
+                          }
+                        }}
+                      >
+                        Login with PIN
+                      </a>
+                    </div>
+                  </>
+                ) : mode === 'pin' ? (
+                  <>
+                    <button
+                      type="button"
+                      className="signin-btn signin-btn-secondary"
+                      onClick={resetToPhone}
+                      disabled={verifying}
+                    >
+                      Change number
+                    </button>
+                    <div className="signin-link-row">
+                      Forgot PIN?{' '}
+                      <a
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          if (verifying) return;
+                          switchToOtpFromPin();
+                        }}
+                        onKeyDown={(e) => {
+                          if ((e.key === 'Enter' || e.key === ' ') && !verifying) {
+                            e.preventDefault();
+                            switchToOtpFromPin();
+                          }
+                        }}
+                      >
+                        Login with OTP
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="signin-btn signin-btn-secondary"
+                    onClick={resetToPhone}
+                    disabled={verifying}
+                  >
+                    Change number
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+
+          {info ? <div className="signin-dev-note">{info}</div> : null}
+          {error ? <div className="signin-err-msg">{error}</div> : null}
         </div>
-      </section>
-
-      <aside className="gojo-auth-side gojo-panel">
-        <p className="gojo-eyebrow">Desk Ready</p>
-        <h2>One login for owners, managers, and front-desk ops.</h2>
-        <p className="gojo-copy">
-          The same access flow unlocks bookings, CRS calendar, rate controls, and revenue visibility without leaving the Gojo shell.
-        </p>
-        <ul className="gojo-auth-feature-list">
-          <li>OTP sign-in with secure session cookies</li>
-          <li>Property-scoped access with seeded demo users</li>
-          <li>Mock OTP support for fast local setup</li>
-        </ul>
-      </aside>
+      </main>
     </div>
   );
 }

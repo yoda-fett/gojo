@@ -6,13 +6,13 @@ import { getActor } from './get-actor';
 import { requireRole } from './require-role';
 
 export function withAuth(
-  handler: (req: NextRequest, actor: Actor) => Promise<Response>,
+  handler: (req: NextRequest, actor: Actor, context?: unknown) => Promise<Response>,
   roles?: Role | Role[],
 ) {
-  return async (req: NextRequest) => {
+  return async (req: NextRequest, context?: unknown) => {
     try {
       const actor = roles ? await requireRole(roles)(req) : await getActor(req);
-      return await handler(req, actor);
+      return await handler(req, actor, context);
     } catch (error) {
       if (error instanceof AppError) {
         return NextResponse.json(

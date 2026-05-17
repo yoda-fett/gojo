@@ -37,7 +37,6 @@ export async function PUT(req: NextRequest, context: Context) {
         maxOccupancy: body.maxOccupancy,
         baseRate: body.baseRate,
         floorRate: body.floorRate,
-        ceilingRate: body.ceilingRate,
         gstSlab: body.gstSlab,
         amenities: body.amenities,
         stateVersion: { increment: 1 },

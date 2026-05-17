@@ -40,10 +40,14 @@ export async function GET(req: NextRequest, context: Context) {
       accessList.map(async (access: { userId: string; role: string; status: string; invitedAt: Date | null }) => {
         const user = await prisma.user.findUnique({ where: { id: access.userId } });
         return {
-          displayName: user?.name ?? maskPhone(user?.phone ?? ''),
+          // userId is included for action wiring (DELETE/resend) only — the UI never renders it.
+          userId: access.userId,
+          displayName: user?.name ?? null,
+          phoneMasked: maskPhone(user?.phone ?? ''),
           role: access.role,
           status: access.status,
           invitedAt: access.invitedAt,
+          isSelf: access.userId === actor.userId,
         };
       }),
     );
@@ -117,7 +121,7 @@ export async function POST(req: NextRequest, context: Context) {
 
     const provider = await getOtpProvider();
     const providerResult = await provider.sendOtp(body.phone);
-    const otpHash = await hash('1234', 10);
+    const otpHash = await hash('123456', 10);
     await prisma.otpSession.create({
       data: {
         sessionId: nanoid(),

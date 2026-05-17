@@ -76,68 +76,19 @@ a {
   background: rgba(41, 128, 90, 0.22);
 }
 
-.gojo-page,
-.gojo-auth-shell {
+.gojo-page {
   min-height: 100vh;
   padding: 32px 24px 48px;
 }
 
-.gojo-auth-shell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.gojo-auth-frame {
-  width: min(1180px, 100%);
-  display: grid;
-  gap: 18px;
-}
-
-.gojo-auth-brand {
-  display: flex;
-  justify-content: center;
-}
-
-.gojo-auth-logo {
-  width: auto;
-  height: 56px;
-}
-
-.gojo-auth-card,
 .gojo-panel,
 .gojo-setup-card {
   border: 1px solid var(--color-line);
   background: var(--color-surface);
   backdrop-filter: blur(18px);
   box-shadow: 0 28px 90px rgba(16, 33, 28, 0.1);
-}
-
-.gojo-auth-card,
-.gojo-panel,
-.gojo-setup-card {
   border-radius: 28px;
   padding: 24px;
-}
-
-.gojo-auth-layout {
-  display: grid;
-  gap: 20px;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-}
-
-.gojo-auth-content {
-  padding: 36px;
-}
-
-.gojo-auth-side {
-  display: grid;
-  align-content: center;
-  gap: 18px;
-  min-height: 100%;
-  background:
-    radial-gradient(circle at top right, rgba(41, 128, 90, 0.12), transparent 30%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 251, 248, 0.96));
 }
 
 .gojo-page-header {
@@ -145,7 +96,6 @@ a {
 }
 
 .gojo-page h1,
-.gojo-auth-card h1,
 .gojo-setup-card h2,
 .gojo-panel h2 {
   margin: 0;
@@ -169,132 +119,396 @@ a {
   line-height: 1.7;
 }
 
-.gojo-auth-form {
+/* ===== Sign-in (Sally wireframe — owner-dashboard/00-login-screen.html) ===== */
+.signin-screen {
+  min-height: 100vh;
   display: grid;
-  gap: 16px;
-  margin-top: 28px;
+  grid-template-columns: 1fr 1fr;
+  background: #fff;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #1A2B2E;
 }
 
-.gojo-auth-field {
-  display: grid;
-  gap: 8px;
-}
-
-.gojo-auth-field span {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-ink);
-}
-
-.gojo-auth-field input {
-  min-height: 52px;
-  border-radius: 16px;
-  border: 1px solid rgba(16, 33, 28, 0.12);
-  background: rgba(255, 255, 255, 0.92);
-  padding: 0 16px;
-  font-size: 16px;
-  color: var(--color-ink);
-  outline: none;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
-}
-
-.gojo-auth-field input:focus {
-  border-color: rgba(41, 128, 90, 0.55);
-  box-shadow: 0 0 0 4px rgba(41, 128, 90, 0.12);
-}
-
-.gojo-auth-phone-input {
+.signin-hero {
+  background: linear-gradient(135deg, #1DA888 0%, #0A6B58 100%);
+  color: #fff;
+  padding: 64px 48px;
   display: flex;
-  align-items: stretch;
-  border-radius: 16px;
-  border: 1px solid rgba(16, 33, 28, 0.12);
-  background: rgba(255, 255, 255, 0.92);
-  overflow: hidden;
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.gojo-auth-phone-input:focus-within {
-  border-color: rgba(41, 128, 90, 0.55);
-  box-shadow: 0 0 0 4px rgba(41, 128, 90, 0.12);
+.signin-hero-logo {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  margin-bottom: 10px;
 }
 
-.gojo-auth-phone-prefix {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 14px;
-  font-size: 16px;
+.signin-hero-tag {
+  font-size: 12px;
+  letter-spacing: 1.2px;
   font-weight: 600;
-  color: var(--color-ink);
-  background: rgba(16, 33, 28, 0.04);
-  border-right: 1px solid rgba(16, 33, 28, 0.08);
-  user-select: none;
+  opacity: 0.9;
+  margin-bottom: 40px;
 }
 
-.gojo-auth-phone-input input {
-  flex: 1;
-  min-height: 52px;
-  border: none;
-  background: transparent;
-  padding: 0 16px;
-  font-size: 16px;
-  letter-spacing: 0.5px;
-  color: var(--color-ink);
-  outline: none;
+.signin-hero h2 {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 16px;
+  max-width: 420px;
 }
 
-.gojo-auth-submit {
-  min-height: 52px;
-  border-radius: 16px;
+.signin-hero p {
+  font-size: 15px;
+  line-height: 1.65;
+  opacity: 0.9;
+  max-width: 440px;
 }
 
-.gojo-auth-actions {
+.signin-pane {
+  background: #fff;
+  padding: 64px 56px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  align-items: center;
+  justify-content: center;
 }
 
-.gojo-auth-message {
-  margin: 14px 0 0;
-  border-radius: 16px;
-  padding: 14px 16px;
-  font-size: 13px;
-  line-height: 1.6;
+.signin-card {
+  width: 100%;
+  max-width: 400px;
 }
 
-.gojo-auth-message-info {
-  background: rgba(41, 128, 90, 0.12);
-  color: var(--color-brand-strong);
+.signin-card h3 {
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 6px;
+  color: #1A2B2E;
 }
 
-.gojo-auth-message-error {
-  background: rgba(200, 76, 46, 0.1);
-  color: #9d3e25;
+.signin-subtitle {
+  font-size: 14px;
+  color: #9EAEAC;
+  margin: 0 0 28px;
 }
 
-.gojo-auth-footnote {
-  margin-top: 20px;
-  border-top: 1px solid rgba(16, 33, 28, 0.08);
-  padding-top: 18px;
-}
-
-.gojo-auth-footnote p,
-.gojo-auth-footnote strong {
+.signin-form {
   display: block;
 }
 
-.gojo-auth-footnote strong {
-  margin-top: 6px;
-  font-size: 13px;
+.signin-form label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1A2B2E;
+  margin-bottom: 6px;
+  letter-spacing: 0.3px;
 }
 
-.gojo-auth-feature-list {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 12px;
-  color: var(--color-muted);
+.signin-phone-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.signin-prefix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border: 1px solid #E8EEED;
+  border-radius: 6px;
+  background: #F4F9F8;
+  font-weight: 700;
   font-size: 14px;
-  line-height: 1.7;
+  color: #223233;
+}
+
+.signin-phone-row input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  padding: 12px 14px;
+  font-size: 15px;
+  font-family: inherit;
+  border: 1px solid #E8EEED;
+  border-radius: 6px;
+  background: #fff;
+  color: #1A2B2E;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.signin-phone-row input::placeholder {
+  color: #9EAEAC;
+}
+
+.signin-phone-row input:focus {
+  border-color: #1DA888;
+  box-shadow: 0 0 0 3px rgba(29, 168, 136, 0.12);
+}
+
+.signin-phone-row input:disabled {
+  opacity: 0.6;
+  background: #FAFCFC;
+}
+
+.signin-helper {
+  font-size: 12px;
+  color: #9EAEAC;
+  margin-top: 6px;
+}
+
+.signin-section-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #9EAEAC;
+  margin-bottom: 10px;
+}
+
+.signin-otp-pin {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid #E8EEED;
+}
+
+.signin-digits {
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.signin-digits.is-verifying {
+  opacity: 0.6;
+}
+
+.signin-digit {
+  width: 64px;
+  height: 68px;
+  min-width: 0;
+  padding: 0;
+  flex: 0 0 64px;
+  border: 2px solid #E8EEED;
+  border-radius: 8px;
+  background: #F4F9F8;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1A2B2E;
+  caret-color: #0A6B58;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.signin-digit:focus {
+  outline: none;
+  border-color: #1DA888;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(29, 168, 136, 0.15);
+}
+
+.signin-digit.is-filled {
+  border-color: #1DA888;
+  background: #fff;
+}
+
+.signin-otp-helper {
+  font-size: 12px;
+  color: #9EAEAC;
+  margin-top: 12px;
+}
+
+.signin-inline-verify {
+  display: inline-flex;
+  align-items: center;
+  color: #0A6B58;
+  font-weight: 600;
+}
+
+.signin-spinner-dark {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(29, 168, 136, 0.25);
+  border-top-color: #1DA888;
+  border-radius: 50%;
+  animation: signin-spin 0.8s linear infinite;
+  margin-right: 8px;
+}
+
+@keyframes signin-spin {
+  to { transform: rotate(360deg); }
+}
+
+.signin-btn-group {
+  margin-top: 26px;
+}
+
+.signin-btn {
+  width: 100%;
+  padding: 13px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  letter-spacing: 0.2px;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.signin-btn-primary {
+  background: #1DA888;
+  color: #fff;
+}
+
+.signin-btn-primary:hover:not(:disabled) {
+  background: #0A6B58;
+}
+
+.signin-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.signin-btn-secondary {
+  background: #F4F9F8;
+  color: #1A2B2E;
+  border: 1px solid #E8EEED;
+}
+
+.signin-btn-secondary:hover:not(:disabled) {
+  background: #E8EEED;
+}
+
+.signin-btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.signin-link-row {
+  text-align: center;
+  margin-top: 14px;
+  font-size: 13px;
+  color: #9EAEAC;
+}
+
+.signin-link-row a {
+  color: #1DA888;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.signin-link-row a:hover {
+  color: #0A6B58;
+}
+
+.signin-dev-note {
+  background: #F4F9F8;
+  border: 1px dashed #E8EEED;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 16px;
+  font-size: 12px;
+  color: #0A6B58;
+}
+
+.signin-err-msg {
+  color: #E8763F;
+  font-size: 13px;
+  margin-top: 12px;
+  font-weight: 500;
+}
+
+.signin-prop-selector {
+  margin-top: 8px;
+}
+
+.signin-prop-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+
+.signin-prop-opt {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #E8EEED;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.signin-prop-opt:hover:not(:disabled) {
+  border-color: #1DA888;
+  background: rgba(29, 168, 136, 0.04);
+}
+
+.signin-prop-opt.is-selecting,
+.signin-prop-opt:focus-visible {
+  border-color: #1DA888;
+  background: rgba(29, 168, 136, 0.06);
+  outline: none;
+}
+
+.signin-prop-opt:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.signin-prop-radio {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid #E8EEED;
+  flex-shrink: 0;
+}
+
+.signin-prop-opt.is-selecting .signin-prop-radio {
+  border-color: #1DA888;
+  background: radial-gradient(circle, #1DA888 40%, #fff 45%);
+}
+
+.signin-prop-name {
+  font-weight: 600;
+  color: #1A2B2E;
+}
+
+.signin-prop-meta {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #9EAEAC;
+}
+
+@media (max-width: 880px) {
+  .signin-screen {
+    grid-template-columns: 1fr;
+  }
+  .signin-hero {
+    padding: 40px 28px;
+  }
+  .signin-pane {
+    padding: 40px 24px;
+  }
 }
 
 .gojo-setup-card {

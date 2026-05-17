@@ -110,6 +110,7 @@ export async function listAvailability(
   };
 }
 
+/** @gateExempt Direct-booking customer flow — no Owner actor exists to gate on. */
 export async function acquireHold({
   slug,
   roomTypeId,
@@ -183,6 +184,7 @@ export async function acquireHold({
   });
 }
 
+/** @gateExempt Cron sweep — system context, no Owner actor. */
 export async function sweepExpiredHolds() {
   const now = new Date();
   const stale = await prisma.room.findMany({

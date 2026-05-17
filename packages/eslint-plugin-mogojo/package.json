@@ -1,0 +1,25 @@
+{
+  "name": "eslint-plugin-mogojo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "rules"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "echo 'no ts in this package'"
+  },
+  "peerDependencies": {
+    "eslint": "^9.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}

@@ -26,7 +26,7 @@ export default async function NewWalkInPage() {
     <div>
       <Topbar title="Create Walk-in" subtitle="Add a front-desk booking and check the guest in immediately." />
       <div className="px-4 py-[28px] sm:px-8">
-        <WalkInForm roomTypes={roomTypes.map((roomType) => ({ id: roomType.id, name: roomType.name, floorRate: Number(roomType.floorRate), ceilingRate: roomType.ceilingRate ? Number(roomType.ceilingRate) : null }))} cancellationPolicies={cancellationPolicies.map((policy) => ({ id: policy.id, name: policy.name }))} />
+        <WalkInForm roomTypes={roomTypes.map((roomType) => ({ id: roomType.id, name: roomType.name, floorRate: Number(roomType.floorRate) }))} cancellationPolicies={cancellationPolicies.map((policy) => ({ id: policy.id, name: policy.name }))} />
       </div>
     </div>
   );

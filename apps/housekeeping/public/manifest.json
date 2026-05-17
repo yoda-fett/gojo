@@ -1,0 +1,9 @@
+{
+  "name": "Gojo Housekeeping",
+  "short_name": "Gojo HK",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F9F8",
+  "theme_color": "#1DA888",
+  "icons": []
+}

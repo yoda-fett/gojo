@@ -14,7 +14,7 @@ export function AmendReservationForm({
   roomTypes,
 }: {
   reservation: any;
-  roomTypes: Array<{ id: string; name: string; floorRate: number; ceilingRate: number | null }>;
+  roomTypes: Array<{ id: string; name: string; floorRate: number }>;
 }) {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -116,7 +116,7 @@ export function AmendReservationForm({
         <label className="space-y-2 text-[13px] font-medium md:col-span-2">
           <span>Nightly Rate</span>
           <input required type="number" className="min-h-11 w-full rounded-[10px] border border-[#d7e3e0] px-3" value={form.rate} onChange={(event) => { setBelowFloorConfirmed(false); setPendingOverride(null); setForm((current) => ({ ...current, rate: event.target.value })); }} />
-          {selectedRoomType ? <p className="text-[12px] text-[var(--color-mid-gray)]">Suggested range: {formatInr(Number(selectedRoomType.floorRate))}{selectedRoomType.ceilingRate ? ` to ${formatInr(Number(selectedRoomType.ceilingRate))}` : ''}</p> : null}
+          {selectedRoomType ? <p className="text-[12px] text-[var(--color-mid-gray)]">Floor rate: {formatInr(Number(selectedRoomType.floorRate))}</p> : null}
         </label>
         {error ? <p className="md:col-span-2 rounded-[10px] bg-[rgba(232,118,63,0.12)] px-4 py-3 text-[13px] text-[var(--color-coral)]">{error}</p> : null}
         <div className="md:col-span-2 flex flex-wrap gap-3">

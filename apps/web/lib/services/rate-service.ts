@@ -5,10 +5,6 @@ import { AppError } from '@gojo/types';
 export async function updateRoomTypeRates(actor, roomTypeId, input) {
   await checkSubscriptionGate(actor, 'RATE_CONFIG_UPDATE', prisma);
 
-  if (input.ceilingRate && input.floorRate > input.ceilingRate) {
-    throw new AppError('INVALID_RATE_RANGE', 'Floor rate must not exceed ceiling rate', 400);
-  }
-
   return prisma.$transaction(async (tx) => {
     const current = await tx.roomType.findFirst({
       where: { id: roomTypeId, propertyId: actor.propertyId, deletedAt: null },
@@ -26,7 +22,6 @@ export async function updateRoomTypeRates(actor, roomTypeId, input) {
       where: { id: roomTypeId },
       data: {
         floorRate: input.floorRate,
-        ceilingRate: input.ceilingRate ?? null,
         stateVersion: { increment: 1 },
       },
     });
@@ -42,8 +37,6 @@ export async function updateRoomTypeRates(actor, roomTypeId, input) {
         metadata: {
           fromFloor: Number(current.floorRate),
           toFloor: input.floorRate,
-          fromCeiling: current.ceilingRate ? Number(current.ceilingRate) : null,
-          toCeiling: input.ceilingRate ?? null,
         },
       },
     });
@@ -62,7 +55,6 @@ export async function validateRateForRoomType(actor, roomTypeId, enteredRate) {
   }
 
   const floorRate = Number(roomType.floorRate);
-  const ceilingRate = roomType.ceilingRate ? Number(roomType.ceilingRate) : null;
 
   if (enteredRate < floorRate) {
     return {
@@ -70,7 +62,6 @@ export async function validateRateForRoomType(actor, roomTypeId, enteredRate) {
       requiresOverrideConfirmation: true,
       delta: floorRate - enteredRate,
       floorRate,
-      ceilingRate,
     };
   }
 
@@ -78,7 +69,5 @@ export async function validateRateForRoomType(actor, roomTypeId, enteredRate) {
     allowed: true,
     requiresOverrideConfirmation: false,
     floorRate,
-    ceilingRate,
-    aboveCeiling: ceilingRate !== null ? enteredRate > ceilingRate : false,
   };
 }

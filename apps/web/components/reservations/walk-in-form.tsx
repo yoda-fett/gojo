@@ -13,7 +13,7 @@ export function WalkInForm({
   roomTypes,
   cancellationPolicies,
 }: {
-  roomTypes: Array<{ id: string; name: string; floorRate: number; ceilingRate: number | null }>;
+  roomTypes: Array<{ id: string; name: string; floorRate: number }>;
   cancellationPolicies: Array<{ id: string; name: string }>;
 }) {
   const router = useRouter();
@@ -136,7 +136,7 @@ export function WalkInForm({
           <input required type="number" min="1" className="min-h-11 w-full rounded-[10px] border border-[#d7e3e0] px-3" value={form.rate} onChange={(event) => { setBelowFloorConfirmed(false); setPendingOverride(null); setForm((current) => ({ ...current, rate: event.target.value })); }} />
           {selectedRoomType ? (
             <p className="text-[12px] text-[var(--color-mid-gray)]">
-              Suggested range: {formatInr(Number(selectedRoomType.floorRate))}{selectedRoomType.ceilingRate ? ` to ${formatInr(Number(selectedRoomType.ceilingRate))}` : ''}
+              Floor rate: {formatInr(Number(selectedRoomType.floorRate))}
             </p>
           ) : null}
         </label>

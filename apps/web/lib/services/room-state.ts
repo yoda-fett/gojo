@@ -7,6 +7,8 @@ import type { Prisma } from '@gojo/db/generated/client';
 /**
  * Atomic room state transition with optimistic concurrency.
  * Throws CONFLICT if `expectedStateVersion` does not match the current row.
+ *
+ * @gateExempt Internal helper — gate is enforced by the calling service.
  */
 export async function transitionRoomState(
   tx: Prisma.TransactionClient,

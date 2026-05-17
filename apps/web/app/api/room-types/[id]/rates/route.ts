@@ -7,11 +7,7 @@ import { updateRoomTypeRates } from '@/lib/services/rate-service';
 
 const schema = z.object({
   floorRate: z.number().positive(),
-  ceilingRate: z.number().positive().optional(),
   stateVersion: z.number().int().min(0),
-}).refine((data) => !data.ceilingRate || data.floorRate <= data.ceilingRate, {
-  message: 'Floor rate must not exceed ceiling rate',
-  path: ['floorRate'],
 });
 
 type Context = { params: Promise<{ id: string }> };

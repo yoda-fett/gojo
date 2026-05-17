@@ -33,6 +33,31 @@ export async function POST(req: Request, context: Context) {
     return NextResponse.json({ code: 'CHANNEL_NOT_FOUND', message: 'Channel not found' }, { status: 401 });
   }
 
+  // Story 10.3 AC1: paused channels reject inbound webhooks with 402.
+  // Log the rejection so a future Phase-3 retry queue can replay it.
+  if (channel.pausedAt) {
+    let pausedPayload: Record<string, unknown> = {};
+    try { pausedPayload = JSON.parse(rawBody); } catch { /* keep empty */ }
+    try {
+      await prisma.webhookEvent.create({
+        data: {
+          channelId,
+          propertyId: channel.propertyId,
+          providerEventId,
+          eventType: 'PAUSED_REJECTED',
+          rawPayload: pausedPayload,
+          processingStatus: 'CHANNEL_PAUSED',
+        },
+      });
+    } catch {
+      // Best-effort log — don't fail the 402 because audit insert failed.
+    }
+    return NextResponse.json(
+      { code: 'CHANNEL_PAUSED', message: 'Channel paused — trial expiring; convert to resume' },
+      { status: 402 },
+    );
+  }
+
   let parsed: Record<string, unknown> = {};
   try {
     parsed = JSON.parse(rawBody);

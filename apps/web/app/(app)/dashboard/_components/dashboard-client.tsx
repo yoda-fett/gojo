@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { ArrivalsMiniList } from '@/components/dashboard/arrivals-mini-list';
 import { KpiCard } from '@/components/dashboard/kpi-card';
+import { SavingsCardNudge } from '@/components/dashboard/savings-card-nudge';
 import { ErrorMessage } from '@/components/ui/error-message';
 import { formatInr, formatPercentValue } from '@/lib/format';
 import { buildRange, type RangePreset } from '@/lib/dashboard/date-range';
@@ -56,7 +57,7 @@ function cardProps(base: { label: string; value: string | number; drilldownHref?
   };
 }
 
-export function DashboardClient({ propertyId, role, initial }: { propertyId: string; role: 'OWNER' | 'MANAGER' | 'FRONT_DESK' | 'HOUSEKEEPING'; initial: DashboardSnapshot }) {
+export function DashboardClient({ propertyId, role, initial, savingsCard }: { propertyId: string; role: 'OWNER' | 'MANAGER' | 'FRONT_DESK' | 'HOUSEKEEPING'; initial: DashboardSnapshot; savingsCard?: import('@/lib/dashboard/savings-card').SavingsCardSnapshot | null }) {
   const [range, setRange] = useState(buildRange('7d'));
   const kpis = useQuery({
     queryKey: ['dashboard-kpis', propertyId, range.from, range.to],
@@ -123,6 +124,12 @@ export function DashboardClient({ propertyId, role, initial }: { propertyId: str
             </>
           )}
         </section>
+
+        {savingsCard ? (
+          <section className="mt-5">
+            <SavingsCardNudge propertyId={propertyId} snapshot={savingsCard} />
+          </section>
+        ) : null}
 
         <section className="mt-5 flex flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_320px]">
           <ChartPanel range={range} onPresetChange={(preset: RangePreset) => setRange(buildRange(preset))} />

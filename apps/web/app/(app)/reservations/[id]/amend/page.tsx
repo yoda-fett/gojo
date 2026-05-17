@@ -27,7 +27,7 @@ export default async function AmendReservationPage({ params }: Context) {
     <div>
       <Topbar title="Amend Reservation" subtitle={reservation.bookingReference} />
       <div className="px-4 py-[28px] sm:px-8">
-        <AmendReservationForm reservation={reservation} roomTypes={roomTypes.map((roomType) => ({ id: roomType.id, name: roomType.name, floorRate: Number(roomType.floorRate), ceilingRate: roomType.ceilingRate ? Number(roomType.ceilingRate) : null }))} />
+        <AmendReservationForm reservation={reservation} roomTypes={roomTypes.map((roomType) => ({ id: roomType.id, name: roomType.name, floorRate: Number(roomType.floorRate) }))} />
       </div>
     </div>
   );

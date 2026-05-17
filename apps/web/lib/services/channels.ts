@@ -1,5 +1,6 @@
 // @ts-nocheck
 import {
+  checkSubscriptionGate,
   prisma,
   encryptSecret,
   generateRandomSecret,
@@ -57,6 +58,7 @@ export async function connectChannel({
   actor: { userId: string; propertyId: string; role: string };
   channelType: (typeof VALID_CHANNEL_TYPES)[number];
 }) {
+  await checkSubscriptionGate(actor, 'channel.connect', prisma);
   if (!VALID_CHANNEL_TYPES.includes(channelType)) {
     throw new AppError('VALIDATION_ERROR', 'Invalid channel type', 400);
   }
@@ -118,6 +120,7 @@ export async function rotateSecret({
   actor: { userId: string; propertyId: string; role: string };
   channelId: string;
 }) {
+  await checkSubscriptionGate(actor, 'channel.rotate_secret', prisma);
   const channel = await prisma.channel.findFirst({
     where: { id: channelId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -159,6 +162,7 @@ export async function disconnectChannel({
   actor: { userId: string; propertyId: string; role: string };
   channelId: string;
 }) {
+  await checkSubscriptionGate(actor, 'channel.disconnect', prisma);
   const channel = await prisma.channel.findFirst({
     where: { id: channelId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -185,6 +189,7 @@ export async function disconnectChannel({
   });
 }
 
+/** @gateExempt Cron sweep — system context, no Owner actor. */
 export async function expireRotatingSecrets() {
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const result = await prisma.webhookSecret.updateMany({

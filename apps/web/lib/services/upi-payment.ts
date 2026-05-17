@@ -66,6 +66,7 @@ export async function startPaymentForHold({
   return { gatewayOrderId: created.gatewayOrderId, amount: Number(created.amount), expiresAt: room.holdExpiresAt };
 }
 
+/** @gateExempt Direct-booking customer flow — no Owner actor exists to gate on. */
 export async function initPendingPayment({
   holdId,
   propertyId,
@@ -131,6 +132,7 @@ async function getActiveSecret(propertyId: string) {
   return row?.secret ?? null;
 }
 
+/** @gateExempt Inbound PSP webhook — no Owner actor; signature-verified at the boundary. */
 export async function processPaymentWebhook({
   rawBody,
   signature,

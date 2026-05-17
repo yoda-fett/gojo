@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { checkSubscriptionGate, prisma, assertHousekeepingTransition } from '@gojo/db';
+import { checkSubscriptionGate, prisma, assertHousekeepingTransition, withIdempotency } from '@gojo/db';
 import { AppError } from '@gojo/types';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -21,6 +21,7 @@ export async function PATCH(req: Request, context: Context) {
     await checkSubscriptionGate(actor, 'HOUSEKEEPING_UPDATE', prisma);
     try {
       const body = schema.parse(await request.json());
+      const idempotencyKey = request.headers.get('idempotency-key');
 
       const room = await prisma.room.findFirst({
         where: { id, propertyId: actor.propertyId, deletedAt: null },
@@ -31,7 +32,8 @@ export async function PATCH(req: Request, context: Context) {
 
       assertHousekeepingTransition(room.state, body.toState, actor.role);
 
-      await prisma.$transaction(async (tx) => {
+      const mutate = async () => {
+        await prisma.$transaction(async (tx) => {
         await transitionRoomState(tx, actor, {
           roomId: id,
           expectedStateVersion: body.stateVersion,
@@ -41,6 +43,12 @@ export async function PATCH(req: Request, context: Context) {
           metadata: { roomId: id },
         });
       });
+        return { ok: true, state: body.toState, stateVersion: body.stateVersion + 1 };
+      };
+
+      const result = idempotencyKey
+        ? await withIdempotency(`room-status:v1:${actor.propertyId}:${id}:${idempotencyKey}`, prisma, mutate)
+        : await mutate();
 
       await publishSseEvent(actor.propertyId, {
         entityType: 'Room',
@@ -50,11 +58,7 @@ export async function PATCH(req: Request, context: Context) {
         eventType: 'HOUSEKEEPING_STATUS_UPDATED',
       });
 
-      return NextResponse.json({
-        ok: true,
-        state: body.toState,
-        stateVersion: body.stateVersion + 1,
-      });
+      return NextResponse.json(result);
     } catch (error) {
       if (error instanceof AppError) {
         return NextResponse.json({ code: error.code, message: error.message }, { status: error.statusCode });

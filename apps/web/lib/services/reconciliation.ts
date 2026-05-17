@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { prisma, reconcile, writeAuditLog } from '@gojo/db';
+import { checkSubscriptionGate, prisma, reconcile, writeAuditLog } from '@gojo/db';
 import type { GatewayTxn, LedgerTxn } from '@gojo/db';
 import { AppError } from '@gojo/types';
 
@@ -75,6 +75,7 @@ async function fetchLedgerForDate(propertyId: string, date: Date): Promise<Ledge
   });
 }
 
+/** @gateExempt Scheduled reconciliation job — system context, no Owner actor. */
 export async function runReconciliation({
   propertyId,
   date,
@@ -200,6 +201,8 @@ export async function acknowledgeDiscrepancy({
   discrepancyId: string;
   actor: { userId: string; propertyId: string; role: string };
 }) {
+  // NOTE 10-1b: 'reconciliation.acknowledge' is not yet in Action union — using string form.
+  await checkSubscriptionGate(actor, 'reconciliation.acknowledge', prisma);
   const existing = await prisma.reconciliationDiscrepancy.findFirst({
     where: { id: discrepancyId, propertyId: actor.propertyId },
   });

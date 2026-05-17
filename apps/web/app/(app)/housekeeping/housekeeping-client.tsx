@@ -128,7 +128,7 @@ export function HousekeepingClient() {
               className={`border-r border-slate-200 px-4 py-2 text-sm font-medium last:border-r-0 ${filter === f.key ? 'bg-teal-600 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
             >
               {f.label}{' '}
-              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[11px] ${filter === f.key ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500'}`}>
+              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[8px] ${filter === f.key ? 'bg-white/25 text-white' : 'bg-slate-100 text-slate-500'}`}>
                 {countFor(f.key, counts, data?.rooms ?? [])}
               </span>
             </button>

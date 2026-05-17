@@ -1,7 +1,16 @@
+import mogojo from 'eslint-plugin-mogojo';
+
 import rootConfig from '../../eslint.config.mjs';
 
 export default [
   ...rootConfig,
+  {
+    files: ['lib/services/**/*.ts', 'lib/services/**/*.tsx'],
+    plugins: { mogojo },
+    rules: {
+      'mogojo/services-subscription-gate': 'error',
+    },
+  },
   {
     files: ['**/*.ts', '**/*.tsx'],
     rules: {
