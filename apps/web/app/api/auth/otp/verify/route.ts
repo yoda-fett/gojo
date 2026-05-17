@@ -1,4 +1,12 @@
 // @ts-nocheck
+// Hotfix 2 Phase A: three-branch response.
+//   - NEW_USER:    phone never seen → no User row, no session; signup_token only.
+//   - NO_PROPERTY: User exists, zero PropertyAccess → signup_token (with userId).
+//   - OK:          User has access; normal session cookies + property/properties.
+//
+// User row creation is DEFERRED to /api/auth/complete-signup for the NEW_USER
+// branch. The existing PROPERTY_ACCESS_DENIED 403 is replaced by NO_PROPERTY.
+
 import { compare } from 'bcryptjs';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -9,6 +17,7 @@ import { AppError } from '@gojo/types';
 import { setSessionCookies } from '@/lib/auth/cookies';
 import { createRefreshToken } from '@/lib/auth/refresh-token';
 import { REFRESH_TOKEN_MAX_AGE, signAccessToken } from '@/lib/auth/jwt';
+import { setSignupTokenCookie, signSignupToken } from '@/lib/auth/signup-token';
 import { getOtpProvider } from '@/lib/otp/factory';
 import { env } from '@/env';
 
@@ -67,7 +76,7 @@ export async function POST(req: Request) {
     if (env.OTP_PROVIDER === 'msg91' && providerRequestId) {
       const provider = await getOtpProvider();
       isValid = await provider.verifyOtp(providerRequestId, body.otp);
-    } else if (env.OTP_PROVIDER === 'mock' && body.otp === '123456') {
+    } else if (env.OTP_PROVIDER === 'mock' && body.otp === '987654') {
       isValid = true;
     } else if (otpHash) {
       isValid = await compare(body.otp, otpHash);
@@ -82,23 +91,31 @@ export async function POST(req: Request) {
           invalidatedAt: attempts >= maxAttempts ? new Date() : null,
         },
       });
-
       if (attempts >= maxAttempts) {
         throw new AppError('OTP_MAX_ATTEMPTS', 'Too many OTP attempts', 429);
       }
-
       throw new AppError('OTP_INVALID', 'Invalid OTP', 401);
     }
 
-    const user = await prisma.user.upsert({
-      where: { phone: sessionData.phone },
-      update: {},
-      create: {
-        phone: sessionData.phone,
-      },
+    // OTP valid — invalidate session to prevent re-use.
+    await prisma.otpSession.update({
+      where: { sessionId: body.sessionId },
+      data: { invalidatedAt: new Date() },
     });
-    const userId = String(user.id);
 
+    const phone = sessionData.phone;
+    const existingUser = await prisma.user.findUnique({ where: { phone } });
+
+    // ── Branch 1: NEW_USER — no row exists. Defer creation to complete-signup.
+    if (!existingUser) {
+      const signupToken = await signSignupToken({ phone });
+      await setSignupTokenCookie(signupToken);
+      return NextResponse.json({ status: 'NEW_USER' });
+    }
+
+    const userId = String(existingUser.id);
+
+    // Honor invitation activation if a pending PropertyAccess matches.
     if (invitationPropertyId) {
       await prisma.propertyAccess.updateMany({
         where: {
@@ -107,35 +124,30 @@ export async function POST(req: Request) {
           status: 'PENDING',
           revokedAt: null,
         },
-        data: {
-          status: 'ACTIVE',
-        },
+        data: { status: 'ACTIVE' },
       });
     }
 
     const propertyAccessList = await prisma.propertyAccess.findMany({
-      where: {
-        userId,
-        deletedAt: null,
-        revokedAt: null,
-        status: 'ACTIVE',
-      },
+      where: { userId, deletedAt: null, revokedAt: null, status: 'ACTIVE' },
       orderBy: [{ role: 'asc' }],
     });
     const accessList = z.array(propertyAccessSchema).parse(propertyAccessList);
+    const hasPin = Boolean(existingUser.pinHash);
 
+    // ── Branch 2: NO_PROPERTY — User exists but has no active access.
     if (accessList.length === 0) {
-      throw new AppError('PROPERTY_ACCESS_DENIED', 'No property access found for user', 403);
+      const signupToken = await signSignupToken({ phone, userId });
+      await setSignupTokenCookie(signupToken);
+      return NextResponse.json({ status: 'NO_PROPERTY', userId, hasPin });
     }
 
-    const sortedAccess = [...accessList].sort((left, right) => activePropertyOrder(left.role) - activePropertyOrder(right.role));
+    // ── Branch 3: OK — issue full session.
+    const sortedAccess = [...accessList].sort(
+      (left, right) => activePropertyOrder(left.role) - activePropertyOrder(right.role),
+    );
     const activeAccess =
-      sortedAccess.find((access) => access.propertyId === invitationPropertyId) ??
-      sortedAccess[0];
-
-    if (!activeAccess) {
-      throw new AppError('PROPERTY_ACCESS_DENIED', 'No active property could be selected', 403);
-    }
+      sortedAccess.find((access) => access.propertyId === invitationPropertyId) ?? sortedAccess[0];
 
     const accessToken = await signAccessToken({
       userId,
@@ -153,14 +165,18 @@ export async function POST(req: Request) {
         expiresAt: new Date(Date.now() + REFRESH_TOKEN_MAX_AGE * 1000),
       },
     });
-
     await setSessionCookies(accessToken, refresh.rawToken);
-    await prisma.otpSession.update({
-      where: { sessionId: body.sessionId },
-      data: {
-        invalidatedAt: new Date(),
-      },
-    });
+
+    // Hotfix 2 Phase E: re-activate the property the owner just logged into.
+    // Owner login is the canonical signal that this is not a dormant account.
+    await prisma.property
+      .updateMany({
+        where: { id: activeAccess.propertyId, active: false },
+        data: { active: true, dormantAt: null },
+      })
+      .catch(() => {
+        /* non-fatal */
+      });
 
     const properties = await Promise.all(
       sortedAccess.map(async (access) => {
@@ -173,26 +189,35 @@ export async function POST(req: Request) {
       }),
     );
 
-    const hasPin = Boolean(user.pinHash);
-
     if (properties.length > 1) {
-      return NextResponse.json({ userId, properties, hasPin });
+      return NextResponse.json({ status: 'OK', userId, properties, hasPin });
     }
-
-    return NextResponse.json({ userId, defaultPropertyId: activeAccess.propertyId, hasPin });
+    return NextResponse.json({
+      status: 'OK',
+      userId,
+      defaultPropertyId: activeAccess.propertyId,
+      hasPin,
+    });
   } catch (error) {
     if (error instanceof AppError) {
-      return NextResponse.json({ code: error.code, message: error.message, ...(error.details ?? {}) }, { status: error.statusCode });
+      return NextResponse.json(
+        { code: error.code, message: error.message, ...(error.details ?? {}) },
+        { status: error.statusCode },
+      );
     }
-
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ code: 'VALIDATION_ERROR', message: error.issues[0]?.message ?? 'Invalid request' }, { status: 422 });
+      return NextResponse.json(
+        { code: 'VALIDATION_ERROR', message: error.issues[0]?.message ?? 'Invalid request' },
+        { status: 422 },
+      );
     }
-
     return NextResponse.json(
       {
         code: 'INTERNAL_ERROR',
-        message: process.env['NODE_ENV'] === 'development' && error instanceof Error ? error.message : 'Unexpected error',
+        message:
+          process.env['NODE_ENV'] === 'development' && error instanceof Error
+            ? error.message
+            : 'Unexpected error',
       },
       { status: 500 },
     );

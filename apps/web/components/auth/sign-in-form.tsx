@@ -10,12 +10,17 @@ type PropertyOption = {
 };
 
 type VerifySuccess =
-  | { userId: string; defaultPropertyId: string; properties?: undefined; hasPin?: boolean }
-  | { userId: string; properties: PropertyOption[]; defaultPropertyId?: undefined; hasPin?: boolean };
+  | { status: 'OK'; userId: string; defaultPropertyId: string; properties?: undefined; hasPin?: boolean }
+  | { status: 'OK'; userId: string; properties: PropertyOption[]; defaultPropertyId?: undefined; hasPin?: boolean }
+  | { status: 'NEW_USER' }
+  | { status: 'NO_PROPERTY'; userId: string; hasPin?: boolean }
+  // Back-compat for PIN endpoint which still returns the old shape.
+  | { userId: string; defaultPropertyId: string; properties?: undefined; hasPin?: boolean; status?: undefined }
+  | { userId: string; properties: PropertyOption[]; defaultPropertyId?: undefined; hasPin?: boolean; status?: undefined };
 
 type VerifyError = { code: string; message: string };
 
-type Mode = 'idle' | 'otp' | 'pin' | 'select-property';
+type Mode = 'idle' | 'otp' | 'pin' | 'name-capture' | 'select-property';
 
 const CODE_LENGTH = 6;
 
@@ -81,6 +86,7 @@ export function SignInForm() {
   const [properties, setProperties] = useState<PropertyOption[]>([]);
   const [selectingPropertyId, setSelectingPropertyId] = useState<string | null>(null);
   const [postLoginHasPin, setPostLoginHasPin] = useState(true);
+  const [nameInput, setNameInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,7 +151,7 @@ export function SignInForm() {
     setInfo(
       payload.reusedExistingSession
         ? 'A recent code is still active for this number.'
-        : 'Code sent. In local development, use 123456.',
+        : 'Code sent. In local development, use 987654.',
     );
   }
 
@@ -214,6 +220,20 @@ export function SignInForm() {
     if (typeof window !== 'undefined') {
       window.sessionStorage.removeItem(sessionStorageKey(normalizedPhone));
     }
+
+    // Hotfix 2 Phase A: three-branch response.
+    const status = 'status' in payload ? payload.status : undefined;
+    if (status === 'NEW_USER') {
+      setMode('name-capture');
+      setNameInput('');
+      return;
+    }
+    if (status === 'NO_PROPERTY') {
+      router.push('/onboarding/create-property');
+      router.refresh();
+      return;
+    }
+
     writeDeviceHint(normalizedPhone, false);
     const hasPin = 'hasPin' in payload ? Boolean(payload.hasPin) : true;
     setPostLoginHasPin(hasPin);
@@ -226,6 +246,28 @@ export function SignInForm() {
 
     const dest = hasPin ? '/dashboard' : '/set-pin';
     router.push(dest);
+    router.refresh();
+  }
+
+  async function submitName(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = nameInput.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const res = await fetch('/api/auth/complete-signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ name: trimmed }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    setSubmitting(false);
+    if (!res.ok) {
+      setError(payload.message ?? 'Could not save your name. Please try again.');
+      return;
+    }
+    router.push('/onboarding/create-property');
     router.refresh();
   }
 
@@ -347,16 +389,20 @@ export function SignInForm() {
       ? 'Choose a property'
       : mode === 'pin'
         ? 'Enter your PIN'
-        : 'Sign in';
+        : mode === 'name-capture'
+          ? "Let's set up your account"
+          : 'Sign in';
 
   const subtitle =
     mode === 'select-property'
       ? 'You have access to multiple properties.'
       : mode === 'otp'
-        ? `Enter the 4-digit code we sent to ${displayPhone(phoneDigits)}.`
+        ? `Enter the 6-digit code we sent to ${displayPhone(phoneDigits)}.`
         : mode === 'pin'
           ? `Enter your 4-digit PIN for ${displayPhone(phoneDigits)}.`
-          : 'Enter your phone number to get started.';
+          : mode === 'name-capture'
+            ? 'We did not find an account with your number. How should I address you?'
+            : 'Enter your phone number to get started.';
 
   return (
     <div className="signin-screen">
@@ -372,7 +418,54 @@ export function SignInForm() {
           <h3>{heading}</h3>
           <p className="signin-subtitle">{subtitle}</p>
 
-          {mode === 'select-property' ? (
+          {mode === 'name-capture' ? (
+            <form className="signin-form" onSubmit={submitName}>
+              <label htmlFor="signupNameInput" style={{ position: 'relative', display: 'block' }}>
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 6,
+                    right: 10,
+                    fontSize: 10,
+                    fontWeight: 600,
+                    letterSpacing: '0.04em',
+                    color: '#9EAEAC',
+                    textTransform: 'uppercase',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  Name
+                </span>
+                <input
+                  id="signupNameInput"
+                  type="text"
+                  autoFocus
+                  maxLength={80}
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="Your name"
+                  style={{
+                    width: '100%',
+                    padding: '24px 14px 12px',
+                    fontSize: 16,
+                    border: '1px solid #D9E5E3',
+                    borderRadius: 8,
+                    outline: 'none',
+                  }}
+                />
+              </label>
+              <div className="signin-btn-group" style={{ marginTop: 16 }}>
+                <button
+                  type="submit"
+                  className="signin-btn signin-btn-primary"
+                  disabled={submitting || nameInput.trim().length === 0}
+                >
+                  {submitting ? 'Saving…' : 'Continue →'}
+                </button>
+              </div>
+              {error ? <div className="signin-error">{error}</div> : null}
+            </form>
+          ) : mode === 'select-property' ? (
             <div className="signin-prop-selector">
               <span className="signin-section-label">Properties</span>
               <ul className="signin-prop-list">

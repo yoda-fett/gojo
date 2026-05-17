@@ -287,6 +287,15 @@ export async function handleTrialNudge(job: Job): Promise<TrialNudgeResult> {
   }
   const data = job.data;
 
+  // Hotfix 2 Phase E: skip inactive properties (dormant / junk).
+  const propertyState = await prisma.property.findUnique({
+    where: { id: data.propertyId },
+    select: { active: true },
+  });
+  if (!propertyState || propertyState.active === false) {
+    return { ok: true, status: 'SKIPPED', message: 'inactive_property' };
+  }
+
   const claimed = await claimRun(data);
   if (!claimed) {
     return { ok: true, deduped: true, status: 'SKIPPED', message: 'already ran' };

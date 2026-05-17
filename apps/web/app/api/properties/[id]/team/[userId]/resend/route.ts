@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, context: Context) {
 
     const provider = await getOtpProvider();
     const providerResult = await provider.sendOtp(user.phone);
-    const otpHash = await hash('123456', 10);
+    const otpHash = await hash('987654', 10);
     await prisma.otpSession.create({
       data: {
         sessionId: nanoid(),

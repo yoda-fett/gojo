@@ -19,6 +19,13 @@ export async function handleGracePeriodExpiry(job: Job): Promise<{ ok: boolean; 
   if (typeof data?.propertyId !== 'string') {
     throw new Error(`GRACE_PERIOD_EXPIRY job ${job.id ?? '?'} has malformed data`);
   }
+  const propertyState = await prisma.property.findUnique({
+    where: { id: data.propertyId },
+    select: { active: true },
+  });
+  if (!propertyState || propertyState.active === false) {
+    return { ok: true, status: 'SKIPPED', message: 'inactive_property' };
+  }
   const sub = await prisma.subscription.findUnique({
     where: { propertyId: data.propertyId },
     select: { status: true },

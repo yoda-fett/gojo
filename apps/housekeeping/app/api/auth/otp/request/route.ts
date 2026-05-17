@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ sessionId: existing.sessionId, reusedExistingSession: true });
   }
 
-  const otp = process.env.NODE_ENV === 'production' ? String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0') : '123456';
+  const otp = process.env.NODE_ENV === 'production' ? String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0') : '987654';
   const sessionId = crypto.randomUUID();
   await prisma.otpSession.create({
     data: {

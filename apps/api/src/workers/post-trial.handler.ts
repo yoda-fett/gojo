@@ -35,6 +35,15 @@ async function loadSavingsSnapshot(propertyId: string): Promise<{
 }
 
 async function shouldFire(propertyId: string, reason: 'summary' | 'social-proof'): Promise<boolean> {
+  // Hotfix 2 Phase E: skip inactive properties.
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { active: true },
+  });
+  if (!property || property.active === false) {
+    console.info(`[post-trial:${reason}] property is inactive; skipping`);
+    return false;
+  }
   const sub = await prisma.subscription.findUnique({
     where: { propertyId },
     select: { status: true },

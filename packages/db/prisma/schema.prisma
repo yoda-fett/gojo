@@ -38,6 +38,8 @@ model Property {
   stateCode            String?  @map("state_code")     @db.VarChar(2)
   currency             String   @default("INR")          @db.VarChar(3)
   timezone             String   @default("Asia/Kolkata")
+  active               Boolean  @default(true)
+  dormantAt            DateTime? @map("dormant_at")
   coldStartCompletedAt DateTime? @map("cold_start_completed_at")
   coldStartProgress    Json?     @map("cold_start_progress") // { lastCompletedStep: number, drafts?: {...}, skipped?: boolean }
   coldStartLinenDeferred Boolean? @default(false) @map("cold_start_linen_deferred")

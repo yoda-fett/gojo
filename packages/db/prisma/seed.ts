@@ -28,6 +28,7 @@ loadEnv(path.join(seedDir, '..', '..', '..', '.env'));
 import { hash } from 'bcryptjs';
 
 import { PrismaClient } from '../src/generated/client/index.js';
+import { seedAnimeProperties } from './seed-anime.js';
 
 const prisma = new PrismaClient();
 const SEED_EPOCH = new Date('2026-01-01T00:00:00.000Z');
@@ -602,6 +603,10 @@ async function main() {
         },
       }),
   );
+
+  // Three themed demo properties (Naruto / Demon Slayer / One Piece) at
+  // different tiers with ~1 year of synthetic activity each. Idempotent.
+  await seedAnimeProperties(prisma);
 }
 
 main()

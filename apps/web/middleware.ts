@@ -42,5 +42,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api/auth|api/internal|_next/static|_next/image|favicon.ico|sign-in).*)'],
+  // `api/properties` POST and `onboarding/create-property` are reachable with
+  // only a signup_token cookie (no access_token yet) — hotfix-2 Phase D.
+  matcher: ['/((?!api/auth|api/internal|api/properties|_next/static|_next/image|favicon.ico|sign-in|onboarding/create-property).*)'],
 };

@@ -10,6 +10,6 @@ export class MockOtpProvider implements OtpProvider {
 
   verifyOtp(requestId: string, otp: string) {
     void requestId;
-    return Promise.resolve(otp === '123456');
+    return Promise.resolve(otp === '987654');
   }
 }

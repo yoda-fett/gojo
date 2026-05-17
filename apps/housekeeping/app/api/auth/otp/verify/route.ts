@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const expiresAt = session.expiresAt instanceof Date ? session.expiresAt : new Date(String(session.expiresAt));
   if (expiresAt.getTime() <= Date.now()) throw new AppError('OTP_EXPIRED', 'OTP expired', 401);
 
-  const mockOk = process.env.NODE_ENV !== 'production' && body.otp === '123456';
+  const mockOk = process.env.NODE_ENV !== 'production' && body.otp === '987654';
   const otpHash = typeof session.otpHash === 'string' ? session.otpHash : null;
   const hashOk = otpHash ? await compare(body.otp, otpHash) : false;
   if (!mockOk && !hashOk) throw new AppError('OTP_INVALID', 'Invalid OTP', 401);

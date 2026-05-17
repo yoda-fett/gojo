@@ -45,7 +45,7 @@ export function SecurityClient({ phone, hasPin: initialHasPin }: Props) {
     setSessionId(payload.sessionId);
     setOtpDigits(Array(LEN).fill(''));
     setStage('otp');
-    setInfo(payload.reusedExistingSession ? 'A recent code is still active.' : 'Code sent. In dev, use 123456.');
+    setInfo(payload.reusedExistingSession ? 'A recent code is still active.' : 'Code sent. In dev, use 987654.');
   }
 
   function handleOtpChange(index: number, raw: string) {
