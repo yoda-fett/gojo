@@ -151,7 +151,7 @@ export function SecurityClient({ phone, hasPin: initialHasPin }: Props) {
               />
             ))}
           </div>
-          <div className="signin-otp-helper">{verifying ? 'Verifying…' : 'Auto-submits on the 4th digit.'}</div>
+          <div className="signin-otp-helper">{verifying ? 'Verifying…' : 'Auto-submits on the 6th digit.'}</div>
         </div>
       ) : null}
 

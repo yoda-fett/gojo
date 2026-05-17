@@ -101,7 +101,7 @@ function buildThemes(): ThemeDef[] {
         ['OP-G08', 'Smoker Tashigi', '+919000119008'],
         ['OP-G09', 'Bartholomew Kuma', '+919000119009'],
         ['OP-G10', 'Dracule Mihawk', '+919000119010'],
-      ].map(([code, name, phone]) => ({ code, name, phone })),
+      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
       reservationCount: 100,
       roomTypes: [
         { id: 'anime-rt-op-std', name: 'Crew Cabin', maxOccupancy: 2, baseRate: '5200.00', floorRate: '4500.00', gstSlab: '12%', amenities: ['WiFi'] },
@@ -148,7 +148,7 @@ function buildThemes(): ThemeDef[] {
         ['DS-G06', 'Muichiro Tokito', '+919000229006'],
         ['DS-G07', 'Sanemi Shinazugawa', '+919000229007'],
         ['DS-G08', 'Obanai Iguro', '+919000229008'],
-      ].map(([code, name, phone]) => ({ code, name, phone })),
+      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
       reservationCount: 60,
       roomTypes: [
         { id: 'anime-rt-ds-std', name: 'Standard', maxOccupancy: 2, baseRate: '3800.00', floorRate: '3200.00', gstSlab: '12%', amenities: ['WiFi'] },
@@ -187,7 +187,7 @@ function buildThemes(): ThemeDef[] {
         ['NA-G03', 'Hinata Hyuga', '+919000339003'],
         ['NA-G04', 'Shikamaru Nara', '+919000339004'],
         ['NA-G05', 'Gaara of the Sand', '+919000339005'],
-      ].map(([code, name, phone]) => ({ code, name, phone })),
+      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
       reservationCount: 25,
       roomTypes: [
         { id: 'anime-rt-na-std', name: 'Genin Room', maxOccupancy: 2, baseRate: '2800.00', floorRate: '2400.00', gstSlab: '12%', amenities: ['WiFi'] },
@@ -196,11 +196,212 @@ function buildThemes(): ThemeDef[] {
       rooms: [
         { id: 'anime-room-na-101', number: '101', floor: 1, roomTypeKey: 'std' },
         { id: 'anime-room-na-102', number: '102', floor: 1, roomTypeKey: 'std' },
+        { id: 'anime-room-na-103', number: '103', floor: 1, roomTypeKey: 'std' },
         { id: 'anime-room-na-201', number: '201', floor: 2, roomTypeKey: 'dlx' },
+        { id: 'anime-room-na-202', number: '202', floor: 2, roomTypeKey: 'dlx' },
       ],
       sourceMix: { DIRECT_BOOKING: 0.55, OTA: 0, WALK_IN: 0.45 },
     },
   ];
+}
+
+// ─── Housekeeping setup ────────────────────────────────────────────────────
+// Each property gets enough catalog + room state to exercise every
+// housekeeping use case 5 times: 5 DIRTY rooms with mixed task types, ≥5
+// amenities + ≥5 linens, daily room assignments distributed across the
+// property's housekeepers. NO activity logs (ConsumptionLog, LaundryLog,
+// IssueReport) — properties start with a clean slate so the housekeeping
+// companion's flows can be tested fresh.
+
+interface AmenityDef {
+  id: string;
+  roomTypeKey: 'std' | 'dlx' | 'suite';
+  name: string;
+  unit: string;
+  expectedQtyPerStay: number;
+  restockThreshold: number;
+}
+
+interface LinenDef {
+  id: string;
+  name: string;
+  unit: string;
+  totalOwned: number;
+  minPoolSize: number;
+}
+
+function amenitiesForTheme(themeKey: string): AmenityDef[] {
+  const k = themeKey;
+  return [
+    { id: `${k}-amen-water-std`, roomTypeKey: 'std', name: 'Drinking Water (1L)', unit: 'bottle', expectedQtyPerStay: 2, restockThreshold: 10 },
+    { id: `${k}-amen-toiletry-std`, roomTypeKey: 'std', name: 'Toiletry Kit', unit: 'kit', expectedQtyPerStay: 1, restockThreshold: 8 },
+    { id: `${k}-amen-soap-std`, roomTypeKey: 'std', name: 'Soap Bar', unit: 'piece', expectedQtyPerStay: 2, restockThreshold: 12 },
+    { id: `${k}-amen-water-dlx`, roomTypeKey: 'dlx', name: 'Drinking Water (1L)', unit: 'bottle', expectedQtyPerStay: 3, restockThreshold: 10 },
+    { id: `${k}-amen-toiletry-dlx`, roomTypeKey: 'dlx', name: 'Toiletry Kit', unit: 'kit', expectedQtyPerStay: 2, restockThreshold: 8 },
+    { id: `${k}-amen-tea-dlx`, roomTypeKey: 'dlx', name: 'Tea/Coffee Sachets', unit: 'sachet', expectedQtyPerStay: 4, restockThreshold: 15 },
+    { id: `${k}-amen-slippers-dlx`, roomTypeKey: 'dlx', name: 'Slippers', unit: 'pair', expectedQtyPerStay: 2, restockThreshold: 8 },
+    { id: `${k}-amen-water-suite`, roomTypeKey: 'suite', name: 'Drinking Water (1L)', unit: 'bottle', expectedQtyPerStay: 4, restockThreshold: 10 },
+    { id: `${k}-amen-toiletry-suite`, roomTypeKey: 'suite', name: 'Toiletry Kit', unit: 'kit', expectedQtyPerStay: 2, restockThreshold: 8 },
+    { id: `${k}-amen-fruit-suite`, roomTypeKey: 'suite', name: 'Fruit Basket', unit: 'basket', expectedQtyPerStay: 1, restockThreshold: 4 },
+  ];
+}
+
+function linensForTheme(themeKey: string): LinenDef[] {
+  const k = themeKey;
+  return [
+    { id: `${k}-linen-bath-towel`, name: 'Bath Towel', unit: 'piece', totalOwned: 120, minPoolSize: 30 },
+    { id: `${k}-linen-bed-sheet`, name: 'Bed Sheet', unit: 'piece', totalOwned: 90, minPoolSize: 24 },
+    { id: `${k}-linen-pillow-cover`, name: 'Pillow Cover', unit: 'piece', totalOwned: 160, minPoolSize: 40 },
+    { id: `${k}-linen-hand-towel`, name: 'Hand Towel', unit: 'piece', totalOwned: 100, minPoolSize: 30 },
+    { id: `${k}-linen-bath-mat`, name: 'Bath Mat', unit: 'piece', totalOwned: 60, minPoolSize: 18 },
+    { id: `${k}-linen-blanket`, name: 'Blanket', unit: 'piece', totalOwned: 50, minPoolSize: 15 },
+  ];
+}
+
+// Rotating task-type recipe — exercises every flow over 5 rooms.
+const TASK_RECIPE: string[][] = [
+  ['CLEAN', 'REFILL'],
+  ['CLEAN', 'STANDARD_LAUNDRY'],
+  ['CLEAN', 'REFILL', 'STANDARD_LAUNDRY'],
+  ['CLEAN', 'PERIODIC_LAUNDRY'],
+  ['CLEAN'],
+];
+
+function dateOnly(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+async function seedHousekeeping(
+  prisma: PrismaClient,
+  theme: ThemeDef,
+  rtKeyToId: Record<'std' | 'dlx' | 'suite', string>,
+): Promise<void> {
+  const propertyId = theme.property.id;
+  const today = dateOnly(NOW);
+
+  // Catalog: amenities (only those whose room type exists for this property)
+  // and linens. Idempotent upserts keyed by the stable string IDs.
+  const amenities = amenitiesForTheme(theme.key).filter((a) => rtKeyToId[a.roomTypeKey]);
+  for (const item of amenities) {
+    const roomTypeId = rtKeyToId[item.roomTypeKey];
+    await prisma.catalogItem.upsert({
+      where: { id: item.id },
+      update: {
+        name: item.name,
+        unit: item.unit,
+        roomTypeId,
+        expectedQtyPerStay: item.expectedQtyPerStay,
+        restockThreshold: item.restockThreshold,
+        deletedAt: null,
+      },
+      create: {
+        id: item.id,
+        propertyId,
+        itemType: 'AMENITY',
+        roomTypeId,
+        name: item.name,
+        unit: item.unit,
+        expectedQtyPerStay: item.expectedQtyPerStay,
+        restockThreshold: item.restockThreshold,
+      },
+    });
+  }
+
+  const linens = linensForTheme(theme.key);
+  for (const item of linens) {
+    await prisma.catalogItem.upsert({
+      where: { id: item.id },
+      update: {
+        name: item.name,
+        unit: item.unit,
+        totalOwned: item.totalOwned,
+        minPoolSize: item.minPoolSize,
+        linenCategory: 'ROUTINE',
+        deletedAt: null,
+      },
+      create: {
+        id: item.id,
+        propertyId,
+        itemType: 'LINEN',
+        name: item.name,
+        unit: item.unit,
+        totalOwned: item.totalOwned,
+        minPoolSize: item.minPoolSize,
+        linenCategory: 'ROUTINE',
+      },
+    });
+  }
+
+  // Take the first 5 rooms as the dirty cohort, flip to DIRTY.
+  const dirtyRooms = theme.rooms.slice(0, 5);
+  for (const room of dirtyRooms) {
+    await prisma.room.update({
+      where: { id: room.id },
+      data: { state: 'DIRTY' },
+    });
+  }
+
+  // Today's room assignments — distribute dirty rooms across housekeepers
+  // round-robin. taskTypes rotate through TASK_RECIPE so every flow is
+  // exercised across the 5 rooms.
+  const hkUsers = theme.housekeepers;
+  for (let i = 0; i < dirtyRooms.length; i++) {
+    const room = dirtyRooms[i]!;
+    const hk = hkUsers[i % hkUsers.length]!;
+    const taskTypes = TASK_RECIPE[i % TASK_RECIPE.length]!;
+    const assignmentId = `${theme.key}-assign-${room.number}-${today.toISOString().slice(0, 10)}`;
+    await prisma.roomAssignment.upsert({
+      where: { id: assignmentId },
+      update: {
+        roomId: room.id,
+        staffUserId: hk.id,
+        taskTypes,
+        deletedAt: null,
+      },
+      create: {
+        id: assignmentId,
+        propertyId,
+        roomId: room.id,
+        staffUserId: hk.id,
+        assignedDate: today,
+        assignedBy: theme.owner.id,
+        taskTypes,
+      },
+    });
+
+    // Initialise consumable state at LOW qty so refill is a meaningful action.
+    const matchingAmenities = amenities.filter((a) => a.roomTypeKey === room.roomTypeKey);
+    for (const amenity of matchingAmenities) {
+      await prisma.roomConsumableState.upsert({
+        where: { propertyId_roomId_catalogItemId: { propertyId, roomId: room.id, catalogItemId: amenity.id } },
+        update: { currentQty: 0 },
+        create: {
+          propertyId,
+          roomId: room.id,
+          catalogItemId: amenity.id,
+          currentQty: 0,
+          lastRefillAt: new Date(NOW.getTime() - 3 * DAY_MS),
+        },
+      });
+    }
+
+    // Initialise linen state at typical in-room qty (2 each) so swap flows
+    // have a starting count.
+    for (const linen of linens) {
+      await prisma.roomLinenState.upsert({
+        where: { propertyId_roomId_catalogItemId: { propertyId, roomId: room.id, catalogItemId: linen.id } },
+        update: { qty: 2 },
+        create: {
+          propertyId,
+          roomId: room.id,
+          catalogItemId: linen.id,
+          qty: 2,
+          seedSource: 'COLD_START',
+          lastObservedAt: new Date(NOW.getTime() - 1 * DAY_MS),
+        },
+      });
+    }
+  }
 }
 
 function pickSource(r: () => number, mix: ThemeDef['sourceMix']): string {
@@ -529,6 +730,10 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
       }
     }
   }
+
+  // Housekeeping setup — catalog, dirty rooms, today's assignments, baseline
+  // room state. No activity logs (clean slate for testing).
+  await seedHousekeeping(prisma, theme, rtKeyToId);
 }
 
 export async function seedAnimeProperties(prisma: PrismaClient): Promise<void> {

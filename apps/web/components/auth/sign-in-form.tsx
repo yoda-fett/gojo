@@ -506,7 +506,7 @@ export function SignInForm() {
                 />
               </div>
               {mode === 'idle' ? (
-                <div className="signin-helper">We&apos;ll send a 4-digit code to this number.</div>
+                <div className="signin-helper">We&apos;ll send a 6-digit code to this number.</div>
               ) : null}
 
               {mode === 'otp' || mode === 'pin' ? (
@@ -514,7 +514,7 @@ export function SignInForm() {
                   <span className="signin-section-label">
                     {mode === 'pin' ? 'PIN' : 'Verification code'}
                   </span>
-                  <div className={`signin-digits${verifying ? ' is-verifying' : ''}`} role="group" aria-label={mode === 'pin' ? '4-digit PIN' : '4-digit verification code'}>
+                  <div className={`signin-digits${verifying ? ' is-verifying' : ''}`} role="group" aria-label={mode === 'pin' ? '4-digit PIN' : '6-digit verification code'}>
                     {codeDigits.map((digit, index) => (
                       <input
                         key={index}
@@ -540,7 +540,7 @@ export function SignInForm() {
                     {verifying ? (
                       <span className="signin-inline-verify"><span className="signin-spinner-dark" />Verifying…</span>
                     ) : (
-                      'Auto-submits on the 4th digit.'
+                      'Auto-submits on the 6th digit.'
                     )}
                   </div>
                 </div>

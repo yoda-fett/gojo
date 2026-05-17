@@ -304,7 +304,7 @@ export function SignInClient() {
             </button>
           </p>
           <PinInput label="One-time code" length={6} masked={false} value={otp} onChange={setOtp} />
-          <p className="hk-pin-status live">Auto-submits on 6th digit</p>
+          <p className="hk-pin-status live">Auto-submits on 4th digit</p>
           {process.env.NODE_ENV !== 'production' ? (
             <p style={{ fontSize: 12, color: '#5C7170', marginTop: 8 }}>Dev: use 987654</p>
           ) : null}
