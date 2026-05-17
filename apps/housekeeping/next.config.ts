@@ -18,10 +18,16 @@ const nextConfig: NextConfig = {
   // symlinks into packages/db (Prisma client lives there).
   outputFileTracingRoot: monorepoRoot,
   // Bundle the Prisma Query Engine binary into the serverless function.
+  // Include patterns are relative to outputFileTracingRoot (monorepo root).
+  // We explicitly list BOTH the canonical source (packages/db) and the
+  // pre-build copy target (apps/housekeeping/src/generated/client) so Vercel's
+  // tracer picks the engine up no matter which path it walks.
   outputFileTracingIncludes: {
     '/**/*': [
-      'packages/db/src/generated/client/libquery_engine-*.so.node',
+      'packages/db/src/generated/client/*.so.node',
       'packages/db/src/generated/client/schema.prisma',
+      'apps/housekeeping/src/generated/client/*.so.node',
+      'apps/housekeeping/src/generated/client/schema.prisma',
     ],
   },
   // Don't bundle Prisma — keep it as a runtime require so the .node engine
