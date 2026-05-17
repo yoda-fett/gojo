@@ -26,7 +26,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ sessionId: existing.sessionId, reusedExistingSession: true });
   }
 
-  const otp = process.env.NODE_ENV === 'production' ? String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0') : '987654';
+  // Mock-OTP gate is env-driven so Vercel preview/PC deployments can keep
+  // accepting the demo value (NODE_ENV is always 'production' on Vercel).
+  // Toggle in production by setting OTP_PROVIDER=msg91 + real provider keys.
+  const useMock = process.env.OTP_PROVIDER === 'mock' || process.env.NODE_ENV !== 'production';
+  const otp = useMock ? '987654' : String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0');
   const sessionId = crypto.randomUUID();
   await prisma.otpSession.create({
     data: {
