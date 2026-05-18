@@ -21,16 +21,24 @@ export const GET = withAuth(async (_req, actor) => {
   });
 
   const guestIds = Array.from(new Set(reservations.map((r) => r.guestId)));
-  const guests = await prisma.guest.findMany({
-    where: { id: { in: guestIds } },
-    select: { id: true, fullName: true },
-  });
+  const roomIds = Array.from(new Set(reservations.map((r) => r.roomId)));
+  const roomTypeIds = Array.from(new Set(reservations.map((r) => r.roomTypeId)));
+  const [guests, rooms, roomTypes] = await Promise.all([
+    prisma.guest.findMany({ where: { id: { in: guestIds } }, select: { id: true, fullName: true } }),
+    prisma.room.findMany({ where: { id: { in: roomIds } }, select: { id: true, number: true } }),
+    prisma.roomType.findMany({ where: { id: { in: roomTypeIds } }, select: { id: true, name: true } }),
+  ]);
   const guestMap = new Map(guests.map((g) => [g.id, g.fullName]));
+  const roomMap = new Map(rooms.map((r) => [r.id, r.number]));
+  const roomTypeMap = new Map(roomTypes.map((rt) => [rt.id, rt.name]));
 
   const items = reservations.map((r) => ({
     reservationId: r.id,
     bookingReference: r.bookingReference,
     guestName: guestMap.get(r.guestId) ?? 'Guest',
+    roomNumber: roomMap.get(r.roomId) ?? '',
+    roomTypeName: roomTypeMap.get(r.roomTypeId) ?? 'Room',
+    source: r.source,
     checkIn: r.checkIn,
     status: r.status,
   }));

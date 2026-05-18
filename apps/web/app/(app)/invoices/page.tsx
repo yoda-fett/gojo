@@ -25,6 +25,33 @@ function formatIstDate(date: Date) {
   return ist.toISOString().slice(0, 10);
 }
 
+// "May 2026" form for card subtitles. Falls back to range string if parsing fails.
+function formatMonthYear(rangeFrom: string): string {
+  const d = new Date(`${rangeFrom}T00:00:00+05:30`);
+  if (Number.isNaN(d.getTime())) return rangeFrom;
+  return d.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+}
+
+// "18 May" form for in-table dates per koko's spec.
+function formatDayMonth(date: Date): string {
+  const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.toLocaleString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+}
+
+// GST state codes for the few states we operate in. Prefer the GSTIN prefix
+// when available since it's authoritative.
+const STATE_CODE_BY_NAME: Record<string, string> = {
+  'West Bengal': '19',
+  Sikkim: '11',
+  Delhi: '07',
+};
+
+function stateWithCode(state?: string | null, gstin?: string | null): string {
+  if (!state) return '—';
+  const code = gstin && /^\d{2}/.test(gstin) ? gstin.slice(0, 2) : STATE_CODE_BY_NAME[state];
+  return code ? `${state} (${code})` : state;
+}
+
 export default async function InvoicesPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const actor = await getServerActor();
   if (!actor || !['OWNER', 'MANAGER'].includes(actor.role)) {
@@ -136,8 +163,6 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
         }
       />
       <div className="space-y-4 px-4 py-[28px] sm:px-8">
-        <InvoiceFilterBar basePath="/invoices" />
-
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <ReportKpiCard label="Invoices Issued" value={String(totals.count)} subLabel={`${totals.creditNotes} credit notes`} delta={0} deltaLabel="this period" />
           <ReportKpiCard label="Total Billed" value={formatInr(totals.total)} subLabel="Net of credit notes" delta={0} deltaLabel="this period" />
@@ -146,7 +171,77 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
           <ReportKpiCard label="B2B Invoices" value={String(totals.b2b)} subLabel="With recipient GSTIN" delta={0} deltaLabel="this period" />
         </section>
 
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px] xl:items-start">
+        <div className="grid gap-5 lg:grid-cols-3 lg:items-stretch">
+          <ReportCard className="lg:col-span-2 h-full" title={`GST Breakdown — ${formatMonthYear(range.from)}`}>
+            <div className="grid grid-cols-3 gap-6">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">Taxable Value</div>
+                <div className="mt-1 text-[22px] font-bold leading-tight text-[var(--color-charcoal)]">{formatInr(totals.taxable)}</div>
+                <div className="mt-0.5 text-[12px] text-[var(--color-mid-gray)]">Room + F&amp;B + extras</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">CGST (6%)</div>
+                <div className="mt-1 text-[22px] font-bold leading-tight text-[#0A6B58]">{formatInr(totals.cgst)}</div>
+                <div className="mt-0.5 text-[12px] text-[var(--color-mid-gray)]">Central GST</div>
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">SGST (6%)</div>
+                <div className="mt-1 text-[22px] font-bold leading-tight text-[#0A6B58]">{formatInr(totals.sgst)}</div>
+                <div className="mt-0.5 text-[12px] text-[var(--color-mid-gray)]">State GST{property?.state ? ` (${property.state})` : ''}</div>
+              </div>
+            </div>
+            <div className="mt-5 border-t border-[var(--color-line-soft)] pt-4">
+              <ul className="space-y-2 text-[13px] text-[var(--color-mid-gray)]">
+                <li className="flex items-baseline justify-between">
+                  <span>Room tariff ≤ ₹7,500/night</span>
+                  <span className="font-semibold text-[var(--color-charcoal)]">12% GST (6+6)</span>
+                </li>
+                <li className="flex items-baseline justify-between">
+                  <span>Room tariff &gt; ₹7,500/night</span>
+                  <span className="font-semibold text-[var(--color-charcoal)]">18% GST (9+9)</span>
+                </li>
+                <li className="flex items-baseline justify-between">
+                  <span>Restaurant / F&amp;B</span>
+                  <span className="font-semibold text-[var(--color-charcoal)]">5% GST (2.5+2.5)</span>
+                </li>
+              </ul>
+            </div>
+          </ReportCard>
+
+          <ReportCard className="h-full" title="Property GST Details">
+            {(() => {
+              const addressLine = [property?.address, property?.city].filter(Boolean).join(', ') || '—';
+              const rows: Array<{ label: string; value: React.ReactNode; mono?: boolean }> = [
+                { label: 'Legal Name', value: property?.name ?? '—' },
+                { label: 'GSTIN', value: property?.gstin ?? <span className="text-[#C45A20]">Not registered</span>, mono: true },
+                { label: 'Registered Address', value: addressLine },
+                { label: 'State', value: stateWithCode(property?.state, property?.gstin) },
+                { label: 'Registration Type', value: 'Regular' },
+                { label: 'HSN / SAC Code', value: '9963 (Accommodation)', mono: true },
+                { label: 'Filing Frequency', value: 'Monthly (GSTR-1 + 3B)' },
+              ];
+              return (
+                <dl className="divide-y divide-[#F4F9F8]">
+                  {rows.map((row) => (
+                    <div key={row.label} className="flex items-start justify-between gap-6 py-0.5">
+                      <dt className="text-[12px] text-[var(--color-mid-gray)]">{row.label}</dt>
+                      <dd className={`max-w-[180px] text-right text-[12px] font-medium text-[var(--color-charcoal)] ${row.mono ? 'font-mono text-[12px] tracking-[0.5px]' : ''}`}>{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              );
+            })()}
+            {!property?.gstin ? (
+              <p className="mt-3 rounded-md bg-[rgba(232,118,63,0.08)] px-3 py-2 text-[10px] text-[#C45A20]">
+                Add a GSTIN in Property Settings before issuing invoices.
+              </p>
+            ) : null}
+          </ReportCard>
+        </div>
+
+        <InvoiceFilterBar basePath="/invoices" />
+
+        <div className="flex flex-col gap-5">
           <ReportCard title="Tax Invoices" subtitle={`${invoices.length} document${invoices.length === 1 ? '' : 's'} · ${range.from} to ${range.to}`} bodyPadding={false}>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-[13px]">
@@ -193,7 +288,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
                     return (
                       <tr key={inv.id} className="border-t border-[#F0F5F4] hover:bg-[var(--color-off-white)]">
                         <td className="px-6 py-3 font-mono text-[12px] font-semibold text-[var(--color-charcoal)]">{inv.invoiceNumber}</td>
-                        <td className="px-6 py-3 font-mono text-[12px] text-[var(--color-mid-gray)]">
+                        <td className="px-2 py-3 font-mono text-[12px] text-[var(--color-mid-gray)]">
                           {linkedReservation?.bookingReference ?? '—'}
                         </td>
                         <td className="px-6 py-3">
@@ -207,7 +302,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
                             <div className="font-mono text-[11px] text-[var(--color-mid-gray)]">{inv.recipientGstin}</div>
                           ) : null}
                         </td>
-                        <td className="px-6 py-3 text-[var(--color-mid-gray)]">{formatIstDate(inv.checkOut)}</td>
+                        <td className="px-6 py-3 text-[var(--color-mid-gray)]">{formatDayMonth(inv.checkOut)}</td>
                         <td className="px-6 py-3 text-right text-[var(--color-charcoal)]">{formatInr(sign * numberize(inv.taxableValue))}</td>
                         <td className="px-6 py-3 text-right text-[var(--color-mid-gray)]">{formatInr(sign * numberize(inv.cgstAmount))}</td>
                         <td className="px-6 py-3 text-right text-[var(--color-mid-gray)]">{formatInr(sign * numberize(inv.sgstAmount))}</td>
@@ -246,68 +341,6 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
               <span className="text-[15px] font-bold text-[var(--color-charcoal)]">{formatInr(totals.total)} billed · {formatInr(totals.cgst + totals.sgst)} GST</span>
             </div>
           </ReportCard>
-
-          <div className="space-y-5">
-            <ReportCard title="GST Breakdown" subtitle={`${range.from} to ${range.to}`}>
-              <dl className="space-y-3 text-[13px]">
-                <div className="flex justify-between">
-                  <dt className="text-[var(--color-mid-gray)]">Taxable Value</dt>
-                  <dd className="font-semibold text-[var(--color-charcoal)]">{formatInr(totals.taxable)}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[var(--color-mid-gray)]">CGST</dt>
-                  <dd className="font-semibold text-[#0A6B58]">{formatInr(totals.cgst)}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-[var(--color-mid-gray)]">SGST</dt>
-                  <dd className="font-semibold text-[#0A6B58]">{formatInr(totals.sgst)}</dd>
-                </div>
-                <div className="flex justify-between border-t border-[#F0F5F4] pt-3">
-                  <dt className="text-[var(--color-charcoal)]">Total Billed</dt>
-                  <dd className="font-bold text-[var(--color-charcoal)]">{formatInr(totals.total)}</dd>
-                </div>
-              </dl>
-              <div className="mt-4 space-y-2 border-t border-[#F0F5F4] pt-3 text-[12px] text-[var(--color-mid-gray)]">
-                <div className="flex justify-between"><span>Room tariff ≤ ₹7,500/night</span><span>12% (6+6)</span></div>
-                <div className="flex justify-between"><span>Room tariff &gt; ₹7,500/night</span><span>18% (9+9)</span></div>
-                <div className="flex justify-between"><span>Restaurant / F&amp;B</span><span>5% (no ITC)</span></div>
-              </div>
-            </ReportCard>
-
-            <ReportCard title="Property GST Details">
-              <dl className="space-y-3 text-[13px]">
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">Legal Name</dt>
-                  <dd className="mt-0.5 text-[var(--color-charcoal)]">{property?.name ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">GSTIN</dt>
-                  <dd className="mt-0.5 font-mono text-[var(--color-charcoal)]">{property?.gstin ?? <span className="text-[#C45A20]">Not registered</span>}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">Registered Address</dt>
-                  <dd className="mt-0.5 text-[var(--color-charcoal)]">{[property?.address, property?.city, property?.state, property?.pincode].filter(Boolean).join(', ') || '—'}</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">HSN / SAC Code</dt>
-                  <dd className="mt-0.5 font-mono text-[var(--color-charcoal)]">9963 (Accommodation)</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">Registration Type</dt>
-                  <dd className="mt-0.5 text-[var(--color-charcoal)]">Regular</dd>
-                </div>
-                <div>
-                  <dt className="text-[11px] uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">Filing Frequency</dt>
-                  <dd className="mt-0.5 text-[var(--color-charcoal)]">Monthly</dd>
-                </div>
-              </dl>
-              {!property?.gstin ? (
-                <p className="mt-3 rounded-md bg-[rgba(232,118,63,0.08)] px-3 py-2 text-[12px] text-[#C45A20]">
-                  Add a GSTIN in Property Settings before issuing invoices.
-                </p>
-              ) : null}
-            </ReportCard>
-          </div>
         </div>
       </div>
     </div>

@@ -132,11 +132,6 @@ export function DashboardClient({ propertyId, role, initial, savingsCard }: { pr
           </section>
         ) : null}
 
-        <section className="mt-5 flex flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_320px]">
-          <ChartPanel range={range} onPresetChange={(preset: RangePreset) => setRange(buildRange(preset))} />
-          <AlertPanel propertyId={propertyId} />
-        </section>
-
         {role !== 'FRONT_DESK' ? (
           <section className="mt-5">
             <OperationsToday propertyId={propertyId} />
@@ -146,6 +141,11 @@ export function DashboardClient({ propertyId, role, initial, savingsCard }: { pr
             <ArrivalsMiniList rows={arrivals.data ?? []} emptyState={<NoArrivalsEmptyState />} />
           </section>
         )}
+
+        <section className="mt-5 flex flex-col gap-5 xl:grid xl:grid-cols-[minmax(0,1fr)_320px]">
+          <ChartPanel range={range} onPresetChange={(preset: RangePreset) => setRange(buildRange(preset))} />
+          <AlertPanel propertyId={propertyId} />
+        </section>
 
         <section className="mt-5">
           <DirectBookingCard propertyId={propertyId} from={range.from} to={range.to} />

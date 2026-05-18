@@ -152,7 +152,7 @@ export function ReservationWorkspace({
         <button
           type="button"
           onClick={() => toggleSort(sortBy)}
-          className={`inline-flex items-center gap-1 uppercase tracking-[0.12em] ${
+          className={`inline-flex cursor-pointer items-center gap-1 uppercase tracking-[0.12em] ${
             active ? 'text-[var(--color-charcoal)]' : 'text-[var(--color-mid-gray)]'
           } hover:text-[var(--color-charcoal)]`}
         >
@@ -224,7 +224,7 @@ export function ReservationWorkspace({
                     <th className="pb-3 pr-3">Room Type</th>
                     <SortHeader label="Check-in" sortBy="checkIn" />
                     <SortHeader label="Check-out" sortBy="checkOut" />
-                    <th className="pb-3 pr-3">Nights</th>
+                    <th className="pb-3 pr-3 text-center">Nights</th>
                     <th className="pb-3 pr-3">Source</th>
                     <th className="pb-3 pr-3">Status</th>
                     <th className="pb-3" aria-label="Open" />

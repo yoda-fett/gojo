@@ -44,7 +44,8 @@ export function InvoiceFilterBar({ basePath }: { basePath: string }) {
   const type = params.get('type') ?? '';
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-[12px] bg-white px-5 py-3 shadow-[0_1px_3px_rgba(26,43,46,0.05)]">
+    <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-[var(--color-line-soft)] bg-white px-5 py-3 shadow-[0_1px_3px_rgba(26,43,46,0.05)]">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-mid-gray)]">Filters</span>
       <label className="flex flex-1 min-w-[220px] max-w-[320px] items-center gap-2 rounded-[8px] border border-[var(--color-line-soft)] bg-[var(--color-off-white)] px-3 py-2">
         <Search className="size-3.5 text-[var(--color-mid-gray)]" aria-hidden="true" />
         <input
