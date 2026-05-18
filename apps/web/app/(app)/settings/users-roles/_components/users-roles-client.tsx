@@ -3,6 +3,9 @@
 
 import { useMemo, useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+
 // Story 12.7e — Users & Roles client.
 // All mutations hit the existing Story 2.5 endpoints. Refetch list after each
 // mutation. "Resend invite" re-POSTs the same { phone, role } — the team
@@ -146,18 +149,23 @@ export function UsersRolesClient({
   }
 
   return (
-    <div style={{ padding: '28px 32px 40px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <div style={{ fontSize: 12, color: MUTED }}>
-          Settings › <span style={{ color: TEAL }}>Users & Roles</span>
-        </div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: CHARCOAL, marginTop: 4 }}>Users & Roles</h1>
-        <p style={{ fontSize: 13, color: '#5C7170', marginTop: 6, maxWidth: 640 }}>
-          Invite your team to <strong>{propertyName}</strong> and assign each person a role. Invitations are sent as
-          an OTP link to their mobile number — they join by completing OTP sign-in.
-        </p>
-      </div>
-
+    <PageShell
+      container="narrow"
+      header={
+        <PageHeader
+          variant="minimal"
+          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Users & Roles' }]}
+          title="Users & Roles"
+          subtitle={
+            <>
+              Invite your team to <strong>{propertyName}</strong> and assign each person a role. Invitations are sent as
+              an OTP link to their mobile number — they join by completing OTP sign-in.
+            </>
+          }
+        />
+      }
+    >
+      <div className="flex flex-col gap-5">
       {error && (
         <div style={{ background: '#F7DCD0', color: '#B5572A', padding: '10px 14px', borderRadius: 8, fontSize: 13 }}>
           {error}
@@ -428,7 +436,8 @@ export function UsersRolesClient({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </PageShell>
   );
 }
 

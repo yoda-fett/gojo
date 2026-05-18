@@ -4,6 +4,9 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+
 // Story 12.7d — Rooms screen client.
 // One client component holding list + add/edit form + range-add mode + 409 UX.
 // After every successful mutation we refetch from GET /api/rooms (no optimistic
@@ -250,16 +253,23 @@ export function RoomsClient({
   const typeName = (id: string) => roomTypes.find((rt) => rt.id === id)?.name ?? '—';
 
   return (
-    <div style={{ padding: '28px 32px 40px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <div style={{ fontSize: 12, color: MUTED }}>Settings › <span style={{ color: TEAL }}>Rooms</span></div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: CHARCOAL, marginTop: 4 }}>Rooms</h1>
-        <p style={{ fontSize: 13, color: '#5C7170', marginTop: 6, maxWidth: 640 }}>
-          Configure your physical room units. Each room belongs to a room type and a floor. Use{' '}
-          <strong>Add range</strong> to create a block of rooms in one action.
-        </p>
-      </div>
-
+    <PageShell
+      container="narrow"
+      header={
+        <PageHeader
+          variant="minimal"
+          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Rooms' }]}
+          title="Rooms"
+          subtitle={
+            <>
+              Configure your physical room units. Each room belongs to a room type and a floor. Use{' '}
+              <strong>Add range</strong> to create a block of rooms in one action.
+            </>
+          }
+        />
+      }
+    >
+      <div className="flex flex-col gap-5">
       {!hasRoomTypes && (
         <div
           style={{
@@ -562,7 +572,8 @@ export function RoomsClient({
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </PageShell>
   );
 }
 

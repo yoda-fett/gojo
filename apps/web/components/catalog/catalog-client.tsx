@@ -3,6 +3,9 @@
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+
 type CatalogItem = {
   id: string;
   itemType: 'AMENITY' | 'LINEN';
@@ -122,26 +125,31 @@ export function CatalogClient({
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-8 py-7">
-      <header className="flex items-end justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Housekeeping Catalog</h1>
-          <p className="text-xs text-slate-500">Definitions for room amenities and the property linen pool.</p>
-        </div>
-        <div className="flex rounded-lg border border-slate-200 bg-white p-1">
-          {(['amenity', 'linen'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setType(tab)}
-              className={`min-h-11 rounded-md px-4 text-sm font-semibold ${type === tab ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-            >
-              {tab === 'amenity' ? 'Amenities' : 'Linens'}
-            </button>
-          ))}
-        </div>
-      </header>
-
+    <PageShell
+      container="narrow"
+      header={
+        <PageHeader
+          variant="minimal"
+          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Housekeeping Catalog' }]}
+          title="Housekeeping Catalog"
+          subtitle="Definitions for room amenities and the property linen pool."
+          controls={
+            <div className="flex rounded-lg border border-[var(--color-line-soft)] bg-white p-1">
+              {(['amenity', 'linen'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setType(tab)}
+                  className={`rounded-md px-4 py-1.5 text-[13px] font-semibold ${type === tab ? 'bg-[var(--color-teal)] text-white' : 'text-[var(--color-mid-gray)] hover:bg-[var(--color-off-white)]'}`}
+                >
+                  {tab === 'amenity' ? 'Amenities' : 'Linens'}
+                </button>
+              ))}
+            </div>
+          }
+        />
+      }
+    >
       {type === 'amenity' ? (
         <div className="mt-6 flex flex-wrap gap-2">
           {roomTypes.map((roomType) => (
@@ -237,7 +245,7 @@ export function CatalogClient({
           <Plus size={18} />
         </button>
       </form>
-    </main>
+    </PageShell>
   );
 }
 

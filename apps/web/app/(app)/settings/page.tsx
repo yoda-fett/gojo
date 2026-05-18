@@ -2,6 +2,8 @@
 import { prisma } from '@gojo/db';
 import Link from 'next/link';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
 import { getServerActor } from '@/lib/auth/server-actor';
 
 // Settings home (Story 12.7a) — index surface for every configuration section,
@@ -145,14 +147,16 @@ export default async function SettingsHomePage() {
   };
 
   return (
-    <div style={{ padding: '28px 32px 40px', maxWidth: 1100 }}>
-      <div style={{ fontSize: 12, color: '#9EAEAC' }}>Settings</div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, margin: '2px 0 4px', color: '#1A2B2E' }}>Settings</h1>
-      <p style={{ fontSize: 13, color: '#5C7170', maxWidth: 580, lineHeight: 1.55 }}>
-        Configure your property. Each section below feeds the same data the cold-start wizard
-        walks through.
-      </p>
-
+    <PageShell
+      container="narrow"
+      header={
+        <PageHeader
+          variant="minimal"
+          title="Settings"
+          subtitle="Configure your property. Each section below feeds the same data the cold-start wizard walks through."
+        />
+      }
+    >
       {/* Setup-status strip */}
       <div
         style={{
@@ -244,6 +248,6 @@ export default async function SettingsHomePage() {
           );
         })}
       </div>
-    </div>
+    </PageShell>
   );
 }

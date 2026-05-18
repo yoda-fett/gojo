@@ -3,6 +3,8 @@
 // + any pending downgrade and hands off to the client form.
 import { prisma } from '@gojo/db';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
 import { getServerActor } from '@/lib/auth/server-actor';
 
 import { PlanManagementForm } from './form';
@@ -26,12 +28,17 @@ export default async function PlanManagementPage() {
   });
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Plan management</h1>
-      <p className="mt-1 text-sm text-slate-600">
-        View your current plan, schedule a downgrade for the next billing cycle, or cancel a
-        pending downgrade.
-      </p>
+    <PageShell
+      container="narrow"
+      header={
+        <PageHeader
+          variant="minimal"
+          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Plan Management' }]}
+          title="Plan Management"
+          subtitle="View your current plan, schedule a downgrade for the next billing cycle, or cancel a pending downgrade."
+        />
+      }
+    >
       <PlanManagementForm
         propertyId={actor.propertyId}
         initial={
@@ -48,6 +55,6 @@ export default async function PlanManagementPage() {
             : null
         }
       />
-    </main>
+    </PageShell>
   );
 }

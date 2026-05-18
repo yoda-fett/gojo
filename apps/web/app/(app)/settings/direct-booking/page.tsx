@@ -1,6 +1,8 @@
 // @ts-nocheck
 import { prisma } from '@gojo/db';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
 import { getServerActor } from '@/lib/auth/server-actor';
 
 import { DirectBookingSettingsForm } from './form';
@@ -20,17 +22,23 @@ export default async function DirectBookingSettingsPage() {
   const publicUrl = property.bookingSlug ? `${baseUrl}/book/${property.bookingSlug}` : null;
 
   return (
-    <main className="mx-auto max-w-2xl p-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Direct booking</h1>
-      <p className="mt-1 text-sm text-slate-600">
-        Enable a public booking widget so guests can book directly with no OTA commission.
-      </p>
+    <PageShell
+      container="narrow"
+      header={
+        <PageHeader
+          variant="minimal"
+          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Direct Booking' }]}
+          title="Direct Booking"
+          subtitle="Enable a public booking widget so guests can book directly with no OTA commission."
+        />
+      }
+    >
       <DirectBookingSettingsForm
         propertyId={property.id}
         initialEnabled={property.directBookingEnabled}
         initialRate={property.averageOtaCommissionRate}
         publicUrl={publicUrl}
       />
-    </main>
+    </PageShell>
   );
 }

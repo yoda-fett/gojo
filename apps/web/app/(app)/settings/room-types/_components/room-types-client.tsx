@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+
 // ─── tokens ─────────────────────────────────────────────────────────────────
 const TEAL = '#1DA888';
 const CHARCOAL = '#1A2B2E';
@@ -252,10 +255,22 @@ export function RoomTypesClient({ initial }: { initial: RoomType[] }) {
   }
 
   return (
-    <div style={{ padding: '28px 32px 40px', maxWidth: 1000 }}>
-      <div style={{ fontSize: 12, color: MUTED }}>Settings › Room Types</div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, margin: '2px 0 18px', color: CHARCOAL }}>Room Types</h1>
-
+    <PageShell
+      container="narrow"
+      header={
+        <PageHeader
+          variant="minimal"
+          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Room Types' }]}
+          title="Room Types"
+          subtitle={
+            <>
+              Configure the different types of rooms in your property. Add or remove{' '}
+              <strong>Amenities</strong> for each room type for the whole set.
+            </>
+          }
+        />
+      }
+    >
       <div style={cardStyle}>
         <div style={cardHeader}>
           <span>Room types</span>
@@ -506,7 +521,7 @@ export function RoomTypesClient({ initial }: { initial: RoomType[] }) {
       {error && !form ? (
         <div style={{ marginTop: 12, color: ERR, fontSize: 12.5, fontWeight: 500 }}>{error}</div>
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 

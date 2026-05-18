@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+
 // ─── shared tokens ──────────────────────────────────────────────────────────
 const TEAL = '#1DA888';
 const CHARCOAL = '#1A2B2E';
@@ -444,10 +447,22 @@ export function PropertyProfileClient({
   initialPolicies: Policy[];
 }) {
   return (
-    <div style={{ padding: '28px 32px 40px', maxWidth: 880 }}>
-      <div style={{ fontSize: 12, color: MUTED }}>Settings › Property Profile</div>
-      <h1 style={{ fontSize: 22, fontWeight: 700, margin: '2px 0 18px', color: CHARCOAL }}>Property Profile</h1>
-
+    <PageShell
+      container="narrow"
+      header={
+        <PageHeader
+          variant="minimal"
+          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Property Profile' }]}
+          title="Property Profile"
+          subtitle={
+            <>
+              Update your property profile. Capture property attributes. Define{' '}
+              <strong>Cancellation policy</strong> to charge customers on cancellation.
+            </>
+          }
+        />
+      }
+    >
       <PatchCard
         title="Property identity"
         propertyId={propertyId}
@@ -516,6 +531,6 @@ export function PropertyProfileClient({
       />
 
       <CancellationPoliciesCard initial={initialPolicies} />
-    </div>
+    </PageShell>
   );
 }

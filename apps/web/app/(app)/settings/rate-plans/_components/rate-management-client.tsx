@@ -4,6 +4,9 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+
 // Story 12.7f — Rate Management hub client. Three cards:
 //   1. Floor Rate Configuration → PATCH /api/room-types/:id/rates
 //   2. Rate Plans                → /api/rate-plans + /:id
@@ -60,20 +63,23 @@ export function RateManagementClient({
   multipliers: MultiplierRow[];
 }) {
   return (
-    <div style={{ padding: '28px 32px 40px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <div style={{ fontSize: 12, color: MUTED }}>Settings › <span style={{ color: TEAL }}>Rate Plans</span></div>
-        <h1 style={{ fontSize: 20, fontWeight: 600, color: CHARCOAL, marginTop: 2 }}>Rate Plans &amp; Multipliers</h1>
-        <p style={{ fontSize: 13, color: '#5C7170', marginTop: 8, maxWidth: 640, lineHeight: 1.55 }}>
-          Set the floor rate per room type, then layer rate plans and seasonal / channel multipliers on top.
-          Floor rate is the only rate bound — no rate plan or multiplier can sell below it.
-        </p>
+    <PageShell
+      container="narrow"
+      header={
+        <PageHeader
+          variant="minimal"
+          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Rate Plans & Multipliers' }]}
+          title="Rate Plans & Multipliers"
+          subtitle="Set the floor rate per room type, then layer rate plans and seasonal / channel multipliers on top. Floor rate is the only rate bound — no rate plan or multiplier can sell below it."
+        />
+      }
+    >
+      <div className="flex flex-col gap-5">
+        <FloorRateCard rows={floorRows} />
+        <RatePlansCard initial={ratePlans} roomTypes={roomTypes} />
+        <MultipliersCard initial={multipliers} roomTypes={roomTypes} />
       </div>
-
-      <FloorRateCard rows={floorRows} />
-      <RatePlansCard initial={ratePlans} roomTypes={roomTypes} />
-      <MultipliersCard initial={multipliers} roomTypes={roomTypes} />
-    </div>
+    </PageShell>
   );
 }
 
