@@ -3,6 +3,9 @@
 import { RefreshCw, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+
 type Assignment = {
   assignmentId: string;
   roomId: string;
@@ -70,18 +73,25 @@ export function AssignmentsClient({
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-8 py-7">
-      <header className="flex items-end justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Daily Room Assignments</h1>
-          <p className="text-xs text-slate-500">{coverage}</p>
-        </div>
-        <button type="button" onClick={refresh} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700">
-          <RefreshCw size={16} /> Refresh
-        </button>
-      </header>
-
-      <section className="mt-6 grid grid-cols-[minmax(280px,360px)_1fr] gap-5">
+    <PageShell
+      header={
+        <PageHeader
+          variant="list"
+          title="Daily Room Assignments"
+          subtitle={coverage}
+          controls={
+            <button
+              type="button"
+              onClick={refresh}
+              className="inline-flex items-center gap-2 rounded-[8px] border border-[var(--color-line-soft)] bg-white px-3 py-1.5 text-[13px] font-semibold text-[var(--color-charcoal)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)]"
+            >
+              <RefreshCw size={14} /> Refresh
+            </button>
+          }
+        />
+      }
+    >
+      <section className="grid grid-cols-[minmax(280px,360px)_1fr] gap-5">
         <aside className="rounded-lg border border-slate-200 bg-white">
           <div className="border-b border-slate-100 p-4">
             <p className="text-sm font-semibold text-slate-900">Unassigned</p>
@@ -135,6 +145,6 @@ export function AssignmentsClient({
           ))}
         </section>
       </section>
-    </main>
+    </PageShell>
   );
 }

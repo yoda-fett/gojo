@@ -3,6 +3,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+
 interface HousekeepingRow {
   roomId: string;
   roomNumber: string;
@@ -102,15 +105,18 @@ export function HousekeepingClient() {
   const rows = (data?.rooms ?? []).filter((r) => passesFilter(r, filter));
   const counts = data?.counts ?? { total: 0, needsCleaning: 0, inProgress: 0, cleanReady: 0, outOfOrder: 0 };
 
-  return (
-    <main className="bg-slate-50 px-8 py-7">
-      <header className="mb-5 flex items-end justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Housekeeping</h1>
-          <p className="text-xs text-slate-500">{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
-        </div>
-      </header>
+  const dateStr = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
+  return (
+    <PageShell
+      header={
+        <PageHeader
+          variant="list"
+          title="Housekeeping"
+          subtitle={dateStr}
+        />
+      }
+    >
       {/* TODO: re-add the "In Progress" KpiCard once the housekeeping state
           machine tracks an active-cleaning state (counts.inProgress is hardcoded
           to 0 in /api/housekeeping today). */}
@@ -194,7 +200,7 @@ export function HousekeepingClient() {
           </p>
         ) : null}
       </section>
-    </main>
+    </PageShell>
   );
 }
 

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import React from 'react';
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -66,14 +68,15 @@ export function LaundryStatusClient() {
   const rows = data?.rows ?? [];
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-5 sm:px-8">
-      <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-950">Laundry Status</h1>
-          <p className="text-sm text-slate-500">{data?.vendor.name ?? 'Laundry vendor'} cycle visibility by room</p>
-        </div>
-      </header>
-
+    <PageShell
+      header={
+        <PageHeader
+          variant="list"
+          title="Laundry Status"
+          subtitle={`${data?.vendor.name ?? 'Laundry vendor'} cycle visibility by room`}
+        />
+      }
+    >
       {isLoading ? <LaundrySkeleton /> : null}
       {!isLoading && rows.length === 0 ? (
         <EmptyState icon={<Shirt className="size-6" />} heading="No rooms found" body="Laundry cycles appear here once rooms are configured." iconTone="gray" />
@@ -139,7 +142,7 @@ export function LaundryStatusClient() {
           onSubmit={(items, appendToOpenCycle) => trigger.mutate({ roomId: pane.roomId, appendToOpenCycle, items })}
         />
       ) : null}
-    </main>
+    </PageShell>
   );
 }
 

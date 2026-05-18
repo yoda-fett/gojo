@@ -6,6 +6,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -120,33 +122,35 @@ export function InventoryClient() {
     },
   });
 
+  const bulkActions = selected.size > 0 && activeTab === 'pending' && canMutate ? (
+    <div className="flex gap-2">
+      <Button
+        type="button"
+        onClick={() => reviewMutation.mutate({ action: 'approve', ids: Array.from(selected) })}
+      >
+        <Check className="mr-2 size-4" /> Approve
+      </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => reviewMutation.mutate({ action: 'reject', ids: Array.from(selected) })}
+      >
+        <X className="mr-2 size-4" /> Reject
+      </Button>
+    </div>
+  ) : null;
+
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-5 sm:px-8">
-      <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-950">Inventory</h1>
-          <p className="text-sm text-slate-500">Amenities, linen pool, and owner review queue</p>
-        </div>
-        {selected.size > 0 && activeTab === 'pending' && canMutate ? (
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              className="min-h-10 px-3"
-              onClick={() => reviewMutation.mutate({ action: 'approve', ids: Array.from(selected) })}
-            >
-              <Check className="mr-2 size-4" /> Approve
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="min-h-10 px-3"
-              onClick={() => reviewMutation.mutate({ action: 'reject', ids: Array.from(selected) })}
-            >
-              <X className="mr-2 size-4" /> Reject
-            </Button>
-          </div>
-        ) : null}
-      </header>
+    <PageShell
+      header={
+        <PageHeader
+          variant="list"
+          title="Inventory"
+          subtitle="Amenities, linen pool, and owner review queue"
+          controls={bulkActions}
+        />
+      }
+    >
 
       <div className="mb-5 flex flex-wrap gap-2 border-b border-slate-200">
         {tabs.map((tab) => (
@@ -193,7 +197,7 @@ export function InventoryClient() {
           }}
         />
       ) : null}
-    </main>
+    </PageShell>
   );
 }
 

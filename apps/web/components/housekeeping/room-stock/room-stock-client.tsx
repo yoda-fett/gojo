@@ -4,6 +4,8 @@ import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckSquare, PackageCheck, Plus, X } from 'lucide-react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -68,19 +70,22 @@ export function RoomStockClient() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-5 sm:px-8">
-      <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-950">Room Stock</h1>
-          <p className="text-sm text-slate-500">Par, last refill, and storage availability by room</p>
-        </div>
-        {stock.data?.canMutate ? (
-          <Button type="button" disabled={selectedRooms.size === 0} onClick={() => setPaneOpen(true)}>
-            <Plus className="mr-2 size-4" /> Generate REFILL
-          </Button>
-        ) : null}
-      </header>
-
+    <PageShell
+      header={
+        <PageHeader
+          variant="list"
+          title="Room Stock"
+          subtitle="Par, last refill, and storage availability by room"
+          primary={
+            stock.data?.canMutate ? (
+              <Button type="button" disabled={selectedRooms.size === 0} onClick={() => setPaneOpen(true)}>
+                <Plus className="mr-1 size-4" /> Generate REFILL
+              </Button>
+            ) : null
+          }
+        />
+      }
+    >
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <input
           value={filter}
@@ -162,7 +167,7 @@ export function RoomStockClient() {
           }}
         />
       ) : null}
-    </main>
+    </PageShell>
   );
 }
 
