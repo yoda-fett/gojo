@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { ArrivalsMiniList } from '@/components/dashboard/arrivals-mini-list';
 import { KpiCard } from '@/components/dashboard/kpi-card';
+import { OperationsToday } from '@/components/dashboard/operations-today';
 import { SavingsCardNudge } from '@/components/dashboard/savings-card-nudge';
 import { ErrorMessage } from '@/components/ui/error-message';
 import { formatInr, formatPercentValue } from '@/lib/format';
@@ -136,9 +137,15 @@ export function DashboardClient({ propertyId, role, initial, savingsCard }: { pr
           <AlertPanel propertyId={propertyId} />
         </section>
 
-        <section className="mt-5">
-          <ArrivalsMiniList rows={arrivals.data ?? []} emptyState={<NoArrivalsEmptyState />} />
-        </section>
+        {role !== 'FRONT_DESK' ? (
+          <section className="mt-5">
+            <OperationsToday propertyId={propertyId} />
+          </section>
+        ) : (
+          <section className="mt-5">
+            <ArrivalsMiniList rows={arrivals.data ?? []} emptyState={<NoArrivalsEmptyState />} />
+          </section>
+        )}
 
         <section className="mt-5">
           <DirectBookingCard propertyId={propertyId} from={range.from} to={range.to} />
