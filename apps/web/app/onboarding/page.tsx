@@ -15,6 +15,7 @@ import { getServerActor } from '@/lib/auth/server-actor';
 import { getBreakEvenForRoomType } from '@/lib/services/break-even-service';
 import { maskPhone } from '@/lib/utils/mask-phone';
 
+import { FinalReview, type FinalReviewData } from './_components/final-review';
 import { WizardShell } from './_components/wizard-shell';
 import { computeStepGates } from './_gates';
 
@@ -297,7 +298,72 @@ export default async function OnboardingPage() {
         publicUrl={currentProperty?.bookingSlug ? `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/book/${currentProperty.bookingSlug}` : null}
       />
     ),
+    8: <FinalReview data={buildFinalReviewData()} />,
   };
+
+  function buildFinalReviewData(): FinalReviewData {
+    // Rooms grouped by floor
+    const floorMap = new Map<number | null, number>();
+    for (const r of rooms) {
+      const key = (r.floor ?? null) as number | null;
+      floorMap.set(key, (floorMap.get(key) ?? 0) + 1);
+    }
+    const byFloor = Array.from(floorMap.entries())
+      .map(([floor, count]) => ({ floor, count }))
+      .sort((a, b) => (a.floor ?? -1) - (b.floor ?? -1));
+
+    // Rooms per room type
+    const roomCountByType = new Map<string, number>();
+    for (const r of rooms) {
+      roomCountByType.set(r.roomTypeId, (roomCountByType.get(r.roomTypeId) ?? 0) + 1);
+    }
+    const roomTypeSummary = roomTypes.map((rt) => ({
+      name: rt.name,
+      baseRate: Number(rt.baseRate),
+      roomCount: roomCountByType.get(rt.id) ?? 0,
+    }));
+
+    // Team by role
+    const byRole: Record<string, number> = {};
+    for (const row of teamRows) {
+      byRole[row.role] = (byRole[row.role] ?? 0) + 1;
+    }
+
+    const skippedDirectBooking = Boolean(state.progress.drafts?.['directBookingSkipped']);
+
+    return {
+      property: {
+        name: property.name,
+        city: property.city,
+        state: property.state,
+        pincode: property.pincode,
+        gstin: property.gstin,
+        contactPhone: property.contactPhone,
+        contactEmail: property.contactEmail,
+        defaultCheckInTime: property.defaultCheckInTime,
+        defaultCheckOutTime: property.defaultCheckOutTime,
+        numberOfFloors: property.numberOfFloors,
+      },
+      roomTypes: roomTypeSummary,
+      rooms: { total: rooms.length, byFloor },
+      team: { total: teamRows.length, byRole },
+      rates: {
+        ratePlanCount: ratePlans.length,
+        multiplierCount: multipliers.length,
+        multiplierNames: multipliers.map((m) => m.name).filter((n): n is string => Boolean(n)),
+      },
+      catalog: {
+        amenityCount,
+        linenCount,
+        laundryVendor: currentProperty?.laundryVendorName ?? null,
+        linenDistributionDeclared: linenCount === 0 || colSeedExists > 0 || Boolean(currentProperty?.coldStartLinenDeferred),
+      },
+      directBooking: {
+        enabled: currentProperty?.directBookingEnabled ?? false,
+        skipped: skippedDirectBooking,
+      },
+    };
+  }
 
   const postAdvanceHrefByStep = needsLinenSubRoute ? { 6: '/onboarding/linen-distribution' } : {};
 

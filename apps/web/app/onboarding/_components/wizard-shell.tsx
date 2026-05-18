@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 
+import { WizardNavContext } from './wizard-nav-context';
+
 // Mirrors @gojo/db ColdStartProgress — kept local so the client bundle does
 // not pull the db package.
 type ColdStartProgress = {
@@ -303,7 +305,11 @@ export function WizardShell({
         {(() => {
           const slot = onReview ? stepContent?.[REVIEW_STEP] : stepContent?.[currentStep];
           if (slot) {
-            return <div style={{ marginTop: 22 }}>{slot}</div>;
+            return (
+              <div style={{ marginTop: 22 }}>
+                <WizardNavContext.Provider value={{ goToStep }}>{slot}</WizardNavContext.Provider>
+              </div>
+            );
           }
           return (
             <div
