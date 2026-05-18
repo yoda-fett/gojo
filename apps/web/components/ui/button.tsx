@@ -10,8 +10,10 @@ const variants = {
   destructive: 'bg-[var(--color-coral)] text-white hover:opacity-90',
 } as const;
 
+// Sized to match the CRS-calendar "+ Booking" canonical brand button.
+// Desktop-only app — no 44px touch-target floor needed.
 const base =
-  'inline-flex min-h-11 min-w-11 items-center justify-center rounded-[8px] px-4 py-2 text-[14px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-teal)]';
+  'inline-flex items-center justify-center gap-1.5 rounded-[8px] px-4 py-2 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-teal)]';
 
 export function Button({
   variant = 'primary',

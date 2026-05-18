@@ -293,7 +293,7 @@ function SidebarNav({ role }: { role?: Role }) {
                 type="button"
                 onClick={() => toggle(sectionKey)}
                 aria-expanded={sectionOpen}
-                className="mb-[2px] flex w-full items-center gap-[6px] px-5 text-[9px] font-medium uppercase tracking-[0.14em] text-[rgba(158,174,172,0.55)] transition-colors hover:text-[rgba(158,174,172,0.9)]"
+                className="mb-[2px] flex w-full items-center gap-[6px] px-5 text-[10px] font-medium uppercase tracking-[0.12em] text-[rgba(158,174,172,0.6)] transition-colors hover:text-[rgba(158,174,172,0.9)]"
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 <ChevronDown

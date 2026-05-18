@@ -4,6 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
+import { PageShell } from '@/components/layout/page-shell';
+import { Button } from '@/components/ui/button';
+
 interface Summary {
   totalRooms: number;
   inHouse: number;
@@ -106,22 +110,20 @@ export function FrontDeskClient() {
   });
 
   return (
-    <main className="bg-slate-50 px-8 py-7">
-      <header className="mb-5 flex items-end justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-900">Front Desk</h1>
-          <p className="text-xs text-slate-500">{dateStr}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/reservations/new"
-            className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white"
-          >
-            + Walk-in
-          </Link>
-        </div>
-      </header>
-
+    <PageShell
+      header={
+        <PageHeader
+          variant="list"
+          title="Front Desk"
+          subtitle={dateStr}
+          primary={
+            <Button href="/reservations/new" variant="primary">
+              + Walk-in
+            </Button>
+          }
+        />
+      }
+    >
       <section className="grid grid-cols-5 gap-3">
         <Kpi label="Total Rooms" value={summary.data?.totalRooms ?? 0} sub="Property" />
         <Kpi label="In-House" value={summary.data?.inHouse ?? 0} sub="Currently staying" tone="teal" />
@@ -132,20 +134,20 @@ export function FrontDeskClient() {
 
       <section className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="rounded-2xl bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
-            <h2 className="text-sm font-semibold text-slate-900">Room Grid</h2>
-            <div className="flex overflow-hidden rounded-lg border border-slate-200 text-xs">
+          <div className="flex items-center justify-between border-b border-[var(--color-line-soft)] px-5 py-3">
+            <h2 className="text-sm font-semibold text-[var(--color-charcoal)]">Room Grid</h2>
+            <div className="flex overflow-hidden rounded-lg border border-[var(--color-line-soft)] text-xs">
               <button
                 type="button"
                 onClick={() => setView('grid')}
-                className={`px-3 py-1.5 ${view === 'grid' ? 'bg-teal-600 text-white' : 'text-slate-500'}`}
+                className={`px-3 py-1.5 ${view === 'grid' ? 'bg-[var(--color-teal)] text-white' : 'text-[var(--color-mid-gray)]'}`}
               >
                 Grid
               </button>
               <button
                 type="button"
                 onClick={() => setView('list')}
-                className={`px-3 py-1.5 ${view === 'list' ? 'bg-teal-600 text-white' : 'text-slate-500'}`}
+                className={`px-3 py-1.5 ${view === 'list' ? 'bg-[var(--color-teal)] text-white' : 'text-[var(--color-mid-gray)]'}`}
               >
                 List
               </button>
@@ -166,7 +168,7 @@ export function FrontDeskClient() {
           <SidePanel title="Departing Today" empty="No departures today" rows={departures.data?.items ?? []} variant="departing" />
         </div>
       </section>
-    </main>
+    </PageShell>
   );
 }
 

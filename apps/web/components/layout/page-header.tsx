@@ -53,7 +53,7 @@ function NotificationsBell() {
     <button
       type="button"
       aria-label="Notifications"
-      className="relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-[8px] border border-[var(--color-line-soft)] bg-white text-[var(--color-charcoal)]"
+      className="relative inline-flex size-9 items-center justify-center rounded-[8px] border border-[var(--color-line-soft)] bg-white text-[var(--color-charcoal)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)]"
     >
       <Bell className="size-4" />
       <span className="absolute right-3 top-3 size-2 rounded-full bg-[var(--color-coral)]" aria-hidden="true" />
@@ -86,7 +86,7 @@ export function PageHeader({
             <Link
               href={back.href}
               aria-label={back.label ?? 'Back'}
-              className="mt-0.5 inline-flex min-h-11 min-w-11 items-center justify-center rounded-[8px] border border-[var(--color-line-soft)] bg-white text-[var(--color-charcoal)] hover:bg-[var(--color-off-white)]"
+              className="mt-0.5 inline-flex size-9 items-center justify-center rounded-[8px] border border-[var(--color-line-soft)] bg-white text-[var(--color-charcoal)] hover:border-[var(--color-teal)] hover:text-[var(--color-teal)]"
             >
               <ArrowLeft className="size-4" />
             </Link>
