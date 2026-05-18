@@ -117,7 +117,7 @@ export function buildSections(role?: Role): NavSection[] {
       label: 'Tools',
       items: [
         { label: 'Channels', href: '/channels', icon: Link2 },
-        { label: 'AI Pricing', href: '/ai-pricing', icon: Sparkles, pill: 'roadmap', disabled: true },
+        { label: 'AI Pricing', href: '/ai-pricing', icon: Sparkles, pill: 'roadmap' },
       ],
     },
     {
