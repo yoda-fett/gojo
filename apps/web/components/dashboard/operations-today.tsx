@@ -101,15 +101,15 @@ function RoomStatusCard({ propertyId }: { propertyId: string }) {
             <StackedSegment value={counts.dirty} total={counts.total} color={SEGMENT_COLORS.dirty} />
             <StackedSegment value={counts.outOfOrder} total={counts.total} color={SEGMENT_COLORS.outOfOrder} />
           </div>
-          <ul className="mt-4 grid grid-cols-2 gap-y-2 text-[12.5px]">
-            <LegendRow color={SEGMENT_COLORS.inHouse} label="In-house" value={counts.inHouse} />
+          <ul className="mt-8 grid grid-cols-2 gap-y-2 text-[12px]">
+            <LegendRow color={SEGMENT_COLORS.inHouse} label="In-house" value={counts.inHouse}/>
             <LegendRow color={SEGMENT_COLORS.vacantClean} label="Vacant clean" value={counts.vacantClean} />
             <LegendRow color={SEGMENT_COLORS.dirty} label="Dirty" value={counts.dirty} />
             <LegendRow color={SEGMENT_COLORS.outOfOrder} label="Out of order" value={counts.outOfOrder} />
           </ul>
           <Link
             href="/front-desk"
-            className="mt-4 inline-flex text-[12.5px] font-semibold text-[var(--color-teal-dark)]"
+            className="mt-4 block w-full text-right text-[12.5px] font-semibold text-[var(--color-teal-dark)]"
           >
             Open Front Desk →
           </Link>
@@ -121,10 +121,10 @@ function RoomStatusCard({ propertyId }: { propertyId: string }) {
 
 function LegendRow({ color, label, value }: { color: string; label: string; value: number }) {
   return (
-    <li className="flex items-center gap-2">
+    <li className="flex items-center gap-2 gap-x-2">
       <span className="size-2 shrink-0 rounded-full" style={{ background: color }} aria-hidden="true" />
       <span className="text-[var(--color-charcoal)]">{label}</span>
-      <span className="ml-auto font-medium text-[var(--color-charcoal)]">{value}</span>
+      <span className="ml-auto font-medium text-[var(--color-charcoal)]">{value} &nbsp; &nbsp; &nbsp;</span>
     </li>
   );
 }
