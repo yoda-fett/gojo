@@ -3,6 +3,8 @@ import { prisma } from '@gojo/db';
 import { AUDIT_ACTION_LABELS, AUDIT_CATEGORY_MAP, getAuditCategory } from '@gojo/types';
 
 import { formatAuditSummary } from '@/lib/audit/format-summary';
+import { FLAGGED_ACTIONS, isFlaggedAction } from '@/lib/audit/flagged-actions';
+import { ActorFilter, type AuditActorOption } from '@/components/audit/actor-filter';
 import { AuditVolumeChart } from '@/components/audit/audit-volume-chart';
 import { CategoryFilterChips } from '@/components/audit/category-filter-chips';
 import { ReportCard } from '@/components/reports/report-card';
@@ -35,11 +37,19 @@ export default async function AuditTrailPage({ searchParams }: { searchParams?: 
   );
   const category = typeof params.category === 'string' ? params.category : null;
   const actorIdFilter = typeof params.actorId === 'string' ? params.actorId : null;
+  const flaggedOnly = params.flagged === '1';
   const page = Math.max(1, Number(typeof params.page === 'string' ? params.page : '1') || 1);
 
   const from = new Date(`${range.from}T00:00:00+05:30`);
   const to = new Date(`${range.to}T23:59:59.999+05:30`);
-  const actionFilter = category && AUDIT_CATEGORY_MAP[category] ? AUDIT_CATEGORY_MAP[category] : undefined;
+  const categoryActions = category && AUDIT_CATEGORY_MAP[category] ? AUDIT_CATEGORY_MAP[category] : undefined;
+  // If both Flagged and a Category are on, intersect; the Flagged set is the
+  // narrower filter so use it as the source of truth and let category trim it.
+  const actionFilter = flaggedOnly
+    ? (categoryActions
+        ? Array.from(FLAGGED_ACTIONS).filter((a) => categoryActions.includes(a))
+        : Array.from(FLAGGED_ACTIONS))
+    : categoryActions;
 
   const where = {
     propertyId: actor.propertyId,
@@ -85,8 +95,24 @@ export default async function AuditTrailPage({ searchParams }: { searchParams?: 
     return day;
   });
 
+  // Events by Module summary (across the filtered range, ignoring page)
+  const eventsByModule = (() => {
+    const counts = { BOOKINGS: 0, BILLING: 0, SETTINGS: 0, OTHER: 0 } as Record<string, number>;
+    for (const row of summaryRows) {
+      counts[getAuditCategory(row.action)] = (counts[getAuditCategory(row.action)] ?? 0) + 1;
+    }
+    return counts;
+  })();
+
+  const actorOptions: AuditActorOption[] = Object.values(userLookup)
+    .map((u) => ({
+      id: u.id,
+      label: `${u.name ?? u.phone}`,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+
   const totalPages = Math.max(1, Math.ceil(tableTotal / PAGE_SIZE));
-  const exportHref = `/api/audit-log/export?from=${range.from}&to=${range.to}${category ? `&category=${category}` : ''}${actorIdFilter ? `&actorId=${actorIdFilter}` : ''}`;
+  const exportHref = `/api/audit-log/export?from=${range.from}&to=${range.to}${category ? `&category=${category}` : ''}${actorIdFilter ? `&actorId=${actorIdFilter}` : ''}${flaggedOnly ? '&flagged=1' : ''}`;
 
   return (
     <div>
@@ -103,7 +129,10 @@ export default async function AuditTrailPage({ searchParams }: { searchParams?: 
         }
       />
       <div className="space-y-4 px-4 py-[28px] sm:px-8">
-        <CategoryFilterChips basePath="/audit" />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <CategoryFilterChips basePath="/audit" />
+          <ActorFilter actors={actorOptions} basePath="/audit" />
+        </div>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <ReportKpiCard label="Total Events" value={String(totalEvents)} subLabel={`Across ${dateKeys.length} days`} delta={0} deltaLabel="this period" />
@@ -113,18 +142,39 @@ export default async function AuditTrailPage({ searchParams }: { searchParams?: 
           <ReportKpiCard label="Data Exports" value={String(dataExports)} subLabel="Audit + guest ID reveals" delta={0} deltaLabel="this period" />
         </section>
 
-        <ReportCard title="Daily Event Volume" subtitle={`${range.from} to ${range.to}`} bodyPadding={false}>
-          <AuditVolumeChart data={dailyVolume} />
-        </ReportCard>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
+          <ReportCard title="Daily Event Volume" subtitle={`${range.from} to ${range.to}`} bodyPadding={false}>
+            <AuditVolumeChart data={dailyVolume} />
+          </ReportCard>
+          <ReportCard title="Events by Module" subtitle={`${totalEvents} events total`}>
+            <ul className="space-y-3">
+              {(['BOOKINGS', 'BILLING', 'SETTINGS', 'OTHER'] as const).map((mod) => {
+                const count = eventsByModule[mod] ?? 0;
+                const pct = totalEvents > 0 ? Math.round((count / totalEvents) * 100) : 0;
+                return (
+                  <li key={mod}>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-[13px] font-medium text-[var(--color-charcoal)]">{mod.charAt(0) + mod.slice(1).toLowerCase()}</span>
+                      <span className="font-mono text-[12px] text-[var(--color-mid-gray)]">{count} · {pct}%</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--color-off-white)]">
+                      <div className="h-full bg-[var(--color-teal)]" style={{ width: `${pct}%` }} aria-hidden="true" />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </ReportCard>
+        </div>
 
         <ReportCard title="Audit Events" subtitle={`${tableTotal} matching events · page ${page} of ${totalPages}`} bodyPadding={false}>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-[13px]">
               <thead>
                 <tr style={{ background: '#FAFCFC' }}>
-                  {['Timestamp (IST)', 'Actor', 'Role', 'Action', 'Entity', 'Summary'].map((label, i) => (
+                  {['', 'Timestamp (IST)', 'Module', 'Actor', 'Role', 'Action', 'Entity', 'Summary'].map((label) => (
                     <th
-                      key={label}
+                      key={label || 'flag'}
                       style={{
                         fontSize: 11,
                         fontWeight: 600,
@@ -133,7 +183,7 @@ export default async function AuditTrailPage({ searchParams }: { searchParams?: 
                         letterSpacing: '0.6px',
                         padding: '10px 24px',
                         borderBottom: '1px solid #F0F5F4',
-                        textAlign: i === 5 ? 'left' : 'left',
+                        textAlign: 'left',
                         whiteSpace: 'nowrap',
                       }}
                     >
@@ -151,9 +201,19 @@ export default async function AuditTrailPage({ searchParams }: { searchParams?: 
                     fromState: row.fromState,
                     toState: row.toState,
                   });
+                  const flagged = isFlaggedAction(row.action);
+                  const moduleKey = getAuditCategory(row.action);
                   return (
                     <tr key={row.id} className="border-t border-[#F0F5F4]">
+                      <td className="px-6 py-3 align-top" aria-label={flagged ? 'Flagged event' : ''}>
+                        {flagged ? <span className="text-[var(--color-coral)]" title="Flagged">⚠</span> : null}
+                      </td>
                       <td className="px-6 py-3 font-mono text-[12px] text-[var(--color-mid-gray)]">{formatIstTimestamp(row.createdAt)}</td>
+                      <td className="px-6 py-3">
+                        <span className="inline-flex rounded-[6px] bg-[var(--color-off-white)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-charcoal)]">
+                          {moduleKey.charAt(0) + moduleKey.slice(1).toLowerCase()}
+                        </span>
+                      </td>
                       <td className="px-6 py-3 text-[var(--color-charcoal)]">{user?.name ?? user?.phone ?? row.actorId.slice(-8)}</td>
                       <td className="px-6 py-3 text-[var(--color-mid-gray)]">{row.actorRole}</td>
                       <td className="px-6 py-3 font-medium text-[var(--color-charcoal)]">{AUDIT_ACTION_LABELS[row.action] ?? row.action}</td>
@@ -164,7 +224,7 @@ export default async function AuditTrailPage({ searchParams }: { searchParams?: 
                 })}
                 {tableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-10 text-center text-[13px] text-[var(--color-mid-gray)]">
+                    <td colSpan={8} className="px-6 py-10 text-center text-[13px] text-[var(--color-mid-gray)]">
                       No audit entries match the current filters.
                     </td>
                   </tr>

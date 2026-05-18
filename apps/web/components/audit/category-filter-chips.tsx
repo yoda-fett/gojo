@@ -13,11 +13,21 @@ export function CategoryFilterChips({ basePath }: { basePath: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const active = params.get('category');
+  const flagged = params.get('flagged') === '1';
 
   function apply(key: string | null) {
     const next = new URLSearchParams(params.toString());
     if (key) next.set('category', key);
     else next.delete('category');
+    next.delete('page');
+    router.replace(`${basePath}?${next.toString()}`, { scroll: false });
+  }
+
+  function toggleFlagged() {
+    const next = new URLSearchParams(params.toString());
+    if (flagged) next.delete('flagged');
+    else next.set('flagged', '1');
+    next.delete('page');
     router.replace(`${basePath}?${next.toString()}`, { scroll: false });
   }
 
@@ -44,6 +54,19 @@ export function CategoryFilterChips({ basePath }: { basePath: string }) {
           </button>
         );
       })}
+      <span className="mx-1 hidden h-5 w-px bg-[var(--color-line-soft)] sm:inline-block" aria-hidden="true" />
+      <button
+        type="button"
+        onClick={toggleFlagged}
+        className="rounded-full border px-3 py-1 text-[12px] font-medium transition-colors"
+        style={
+          flagged
+            ? { borderColor: 'var(--color-coral)', background: 'rgba(232,118,63,0.10)', color: 'var(--color-coral)' }
+            : { borderColor: '#E8EFEE', background: '#fff', color: '#1A2B2E' }
+        }
+      >
+        ⚠ Flagged
+      </button>
     </div>
   );
 }
