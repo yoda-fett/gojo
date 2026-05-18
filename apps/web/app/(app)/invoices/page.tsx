@@ -1,6 +1,10 @@
 // @ts-nocheck
+import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
+
 import { prisma } from '@gojo/db';
 
+import { InvoiceFilterBar } from '@/components/invoices/invoice-filter-bar';
 import { ReportCard } from '@/components/reports/report-card';
 import { ReportKpiCard } from '@/components/reports/report-kpi-card';
 import { ReportTopbarControls } from '@/components/reports/report-topbar-controls';
@@ -33,9 +37,36 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
     typeof params.endDate === 'string' ? params.endDate : null,
     'mtd',
   );
+  const q = (typeof params.q === 'string' ? params.q : '').trim();
+  const statusFilter = typeof params.status === 'string' ? params.status : '';
+  const typeFilter = typeof params.type === 'string' ? params.type : '';
 
   const from = new Date(`${range.from}T00:00:00+05:30`);
   const to = new Date(`${range.to}T23:59:59.999+05:30`);
+
+  // Translate the typeFilter UI value into prisma where clauses.
+  const typeWhere = (() => {
+    if (typeFilter === 'B2B') return { type: 'INVOICE', recipientGstin: { not: null } };
+    if (typeFilter === 'B2C') return { type: 'INVOICE', recipientGstin: null };
+    if (typeFilter === 'CREDIT_NOTE') return { type: 'CREDIT_NOTE' };
+    return {};
+  })();
+
+  const where = {
+    propertyId: actor.propertyId,
+    invoiceDate: { gte: from, lte: to },
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...typeWhere,
+    ...(q
+      ? {
+          OR: [
+            { invoiceNumber: { contains: q, mode: 'insensitive' as const } },
+            { recipientName: { contains: q, mode: 'insensitive' as const } },
+            { recipientGstin: { contains: q, mode: 'insensitive' as const } },
+          ],
+        }
+      : {}),
+  };
 
   const [property, invoices] = await Promise.all([
     prisma.property.findUnique({
@@ -43,10 +74,35 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
       select: { name: true, gstin: true, address: true, city: true, state: true, pincode: true },
     }),
     prisma.invoice.findMany({
-      where: { propertyId: actor.propertyId, invoiceDate: { gte: from, lte: to } },
+      where,
       orderBy: { invoiceDate: 'desc' },
     }),
   ]);
+
+  // Resolve folio → reservation booking ref + id (one batched query) so the
+  // table can show Booking Ref and the chevron can deep-link to the booking.
+  const folioIds = Array.from(new Set(invoices.map((inv) => inv.folioId)));
+  const folios = folioIds.length
+    ? await prisma.folio.findMany({
+        where: { id: { in: folioIds } },
+        select: { id: true, reservationId: true },
+      })
+    : [];
+  const reservationIds = Array.from(new Set(folios.map((f) => f.reservationId)));
+  const reservations = reservationIds.length
+    ? await prisma.reservation.findMany({
+        where: { id: { in: reservationIds } },
+        select: { id: true, bookingReference: true },
+      })
+    : [];
+  const folioToReservation = new Map(folios.map((f) => [f.id, f.reservationId]));
+  const reservationMap = new Map(reservations.map((r) => [r.id, r]));
+
+  function reservationForInvoice(folioId: string): { id: string; bookingReference: string | null } | null {
+    const reservationId = folioToReservation.get(folioId);
+    if (!reservationId) return null;
+    return reservationMap.get(reservationId) ?? null;
+  }
 
   const totals = invoices.reduce(
     (acc, inv) => {
@@ -80,6 +136,8 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
         }
       />
       <div className="space-y-4 px-4 py-[28px] sm:px-8">
+        <InvoiceFilterBar basePath="/invoices" />
+
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <ReportKpiCard label="Invoices Issued" value={String(totals.count)} subLabel={`${totals.creditNotes} credit notes`} delta={0} deltaLabel="this period" />
           <ReportKpiCard label="Total Billed" value={formatInr(totals.total)} subLabel="Net of credit notes" delta={0} deltaLabel="this period" />
@@ -96,16 +154,19 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
                   <tr style={{ background: '#FAFCFC' }}>
                     {[
                       { label: 'Invoice No.', align: 'left' as const },
+                      { label: 'Booking', align: 'left' as const },
                       { label: 'Type', align: 'left' as const },
                       { label: 'Recipient', align: 'left' as const },
-                      { label: 'Issued', align: 'left' as const },
+                      { label: 'Check-out', align: 'left' as const },
                       { label: 'Taxable', align: 'right' as const },
                       { label: 'CGST', align: 'right' as const },
                       { label: 'SGST', align: 'right' as const },
                       { label: 'Total', align: 'right' as const },
+                      { label: 'Status', align: 'left' as const },
+                      { label: '', align: 'right' as const },
                     ].map((col) => (
                       <th
-                        key={col.label}
+                        key={col.label || 'arrow'}
                         style={{
                           fontSize: 11,
                           fontWeight: 600,
@@ -127,9 +188,14 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
                   {invoices.map((inv) => {
                     const isCredit = inv.type === 'CREDIT_NOTE';
                     const sign = isCredit ? -1 : 1;
+                    const linkedReservation = reservationForInvoice(inv.folioId);
+                    const detailHref = linkedReservation?.id ? `/reservations/${linkedReservation.id}` : null;
                     return (
-                      <tr key={inv.id} className="border-t border-[#F0F5F4]">
+                      <tr key={inv.id} className="border-t border-[#F0F5F4] hover:bg-[var(--color-off-white)]">
                         <td className="px-6 py-3 font-mono text-[12px] font-semibold text-[var(--color-charcoal)]">{inv.invoiceNumber}</td>
+                        <td className="px-6 py-3 font-mono text-[12px] text-[var(--color-mid-gray)]">
+                          {linkedReservation?.bookingReference ?? '—'}
+                        </td>
                         <td className="px-6 py-3">
                           <span className={`inline-flex rounded-[4px] px-1.5 py-0.5 text-[11px] font-medium ${isCredit ? 'bg-[rgba(232,118,63,0.12)] text-[#C45A20]' : inv.recipientGstin ? 'bg-[rgba(29,168,136,0.1)] text-[#0A6B58]' : 'bg-[rgba(158,174,172,0.12)] text-[#6B7574]'}`}>
                             {isCredit ? 'Credit Note' : inv.recipientGstin ? 'B2B' : 'B2C'}
@@ -141,18 +207,34 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
                             <div className="font-mono text-[11px] text-[var(--color-mid-gray)]">{inv.recipientGstin}</div>
                           ) : null}
                         </td>
-                        <td className="px-6 py-3 text-[var(--color-mid-gray)]">{formatIstDate(inv.invoiceDate)}</td>
+                        <td className="px-6 py-3 text-[var(--color-mid-gray)]">{formatIstDate(inv.checkOut)}</td>
                         <td className="px-6 py-3 text-right text-[var(--color-charcoal)]">{formatInr(sign * numberize(inv.taxableValue))}</td>
                         <td className="px-6 py-3 text-right text-[var(--color-mid-gray)]">{formatInr(sign * numberize(inv.cgstAmount))}</td>
                         <td className="px-6 py-3 text-right text-[var(--color-mid-gray)]">{formatInr(sign * numberize(inv.sgstAmount))}</td>
                         <td className="px-6 py-3 text-right font-semibold text-[var(--color-charcoal)]">{formatInr(sign * numberize(inv.totalAmount))}</td>
+                        <td className="px-6 py-3">
+                          <span className={`inline-flex rounded-[4px] px-1.5 py-0.5 text-[11px] font-medium ${inv.status === 'PAID' ? 'bg-[rgba(29,168,136,0.12)] text-[#0A6B58]' : inv.status === 'VOID' ? 'bg-[rgba(232,118,63,0.12)] text-[#C45A20]' : 'bg-[rgba(158,174,172,0.18)] text-[var(--color-charcoal)]'}`}>
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-3 text-right">
+                          {detailHref ? (
+                            <Link
+                              href={detailHref}
+                              aria-label={`Open booking ${linkedReservation?.bookingReference ?? ''}`}
+                              className="inline-flex size-7 items-center justify-center rounded-md text-[var(--color-mid-gray)] hover:bg-[var(--color-line-soft)] hover:text-[var(--color-teal)]"
+                            >
+                              <ChevronRight className="size-4" />
+                            </Link>
+                          ) : null}
+                        </td>
                       </tr>
                     );
                   })}
                   {invoices.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-10 text-center text-[13px] text-[var(--color-mid-gray)]">
-                        No invoices issued in this period.
+                      <td colSpan={11} className="px-6 py-10 text-center text-[13px] text-[var(--color-mid-gray)]">
+                        No invoices match the current filters.
                       </td>
                     </tr>
                   ) : null}
@@ -188,6 +270,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
               <div className="mt-4 space-y-2 border-t border-[#F0F5F4] pt-3 text-[12px] text-[var(--color-mid-gray)]">
                 <div className="flex justify-between"><span>Room tariff ≤ ₹7,500/night</span><span>12% (6+6)</span></div>
                 <div className="flex justify-between"><span>Room tariff &gt; ₹7,500/night</span><span>18% (9+9)</span></div>
+                <div className="flex justify-between"><span>Restaurant / F&amp;B</span><span>5% (no ITC)</span></div>
               </div>
             </ReportCard>
 
@@ -208,6 +291,14 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
                 <div>
                   <dt className="text-[11px] uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">HSN / SAC Code</dt>
                   <dd className="mt-0.5 font-mono text-[var(--color-charcoal)]">9963 (Accommodation)</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">Registration Type</dt>
+                  <dd className="mt-0.5 text-[var(--color-charcoal)]">Regular</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] uppercase tracking-[0.06em] text-[var(--color-mid-gray)]">Filing Frequency</dt>
+                  <dd className="mt-0.5 text-[var(--color-charcoal)]">Monthly</dd>
                 </div>
               </dl>
               {!property?.gstin ? (
