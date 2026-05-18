@@ -55,6 +55,10 @@ function buildClient(): PrismaClient {
 
 export const prisma = globalForPrisma.prisma ?? buildClient();
 
-if (process.env['NODE_ENV'] !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+// Cache the client globally in every environment. The earlier dev-only guard
+// was inverted for serverless: on Vercel, fresh per-cold-start module
+// evaluation is exactly when we want this short-circuit to prevent a second
+// PrismaClient (and its connection pool) from spinning up on the same
+// instance. In dev, this matches the original behaviour and dodges HMR
+// double-instantiation the same way it always did.
+globalForPrisma.prisma = prisma;
