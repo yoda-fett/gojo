@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 
 import { StatusChip } from '@/components/reservations/status-chip';
-import { Button } from '@/components/ui/button';
+import { Chip } from '@/components/ui/chip';
 import { formatIST } from '@/lib/tz';
-import { canPerform } from '@/lib/auth/rbac';
 
-type ReservationRow = {
+type ReservationSource = 'WALK_IN' | 'DIRECT_BOOKING' | 'OTA' | string;
+
+export type ReservationRow = {
   id: string;
   bookingReference: string;
   guestName: string;
@@ -17,64 +19,48 @@ type ReservationRow = {
   checkIn: string;
   checkOut: string;
   status: string;
+  source: ReservationSource;
   sourceLabel: string;
+  nights: number;
 };
 
-export function ReservationListRow({ reservation, role }: { reservation: ReservationRow; role: 'OWNER' | 'MANAGER' | 'FRONT_DESK' }) {
+function sourceVariant(source: ReservationSource): 'positive' | 'neutral' | 'caution' {
+  if (source === 'DIRECT_BOOKING') return 'positive';
+  if (source === 'WALK_IN') return 'neutral';
+  return 'caution'; // OTA + any other
+}
+
+export function ReservationListRow({ reservation }: { reservation: ReservationRow }) {
+  const detailHref = `/reservations/${reservation.id}`;
   return (
-    <tr className="border-t border-[#edf3f1] align-top text-[13px] text-[var(--color-charcoal)]">
-      <td className="py-4 pr-3">
-        <Link href={`/reservations/${reservation.id}`} className="font-semibold text-[var(--color-charcoal)] hover:text-[var(--color-teal)]">
+    <tr className="border-t border-[#edf3f1] align-middle text-[13px] text-[var(--color-charcoal)] hover:bg-[var(--color-off-white)]">
+      <td className="py-3 pr-3">
+        <Link href={detailHref} className="font-semibold text-[var(--color-charcoal)] hover:text-[var(--color-teal)]">
           {reservation.bookingReference}
         </Link>
-        <p className="mt-1 text-[12px] text-[var(--color-mid-gray)]">{reservation.sourceLabel}</p>
       </td>
-      <td className="py-4 pr-3">
+      <td className="py-3 pr-3">
         <p className="font-medium">{reservation.guestName}</p>
-        <p className="mt-1 text-[12px] text-[var(--color-mid-gray)]">{reservation.guestPhone}</p>
+        <p className="mt-0.5 text-[12px] text-[var(--color-mid-gray)]">{reservation.guestPhone}</p>
       </td>
-      <td className="py-4 pr-3">
-        <p className="font-medium">Room {reservation.roomNumber}</p>
-        <p className="mt-1 text-[12px] text-[var(--color-mid-gray)]">{reservation.roomType}</p>
+      <td className="py-3 pr-3">{reservation.roomType}</td>
+      <td className="py-3 pr-3 whitespace-nowrap">{formatIST(reservation.checkIn, 'dd MMM yyyy')}</td>
+      <td className="py-3 pr-3 whitespace-nowrap">{formatIST(reservation.checkOut, 'dd MMM yyyy')}</td>
+      <td className="py-3 pr-3">{reservation.nights}</td>
+      <td className="py-3 pr-3">
+        <Chip variant={sourceVariant(reservation.source)}>{reservation.sourceLabel}</Chip>
       </td>
-      <td className="py-4 pr-3">
-        <p>{formatIST(reservation.checkIn, 'dd MMM yyyy')}</p>
-        <p className="mt-1 text-[12px] text-[var(--color-mid-gray)]">to {formatIST(reservation.checkOut, 'dd MMM yyyy')}</p>
-      </td>
-      <td className="py-4 pr-3">
+      <td className="py-3 pr-3">
         <StatusChip status={reservation.status} />
       </td>
-      <td className="py-4">
-        <div className="flex flex-wrap gap-2">
-          <Button variant="ghost" href={`/reservations/${reservation.id}`} className="px-3">
-            Open
-          </Button>
-          {reservation.status === 'ARRIVING_TODAY' || reservation.status === 'CONFIRMED' ? (
-            <Button variant="secondary" href={`/reservations/${reservation.id}/check-in`} className="px-3">
-              Check In
-            </Button>
-          ) : null}
-          {reservation.status === 'CHECKED_IN' || reservation.status === 'CHECKING_OUT_TODAY' ? (
-            <Button variant="secondary" href={`/reservations/${reservation.id}/check-out`} className="px-3">
-              Check Out
-            </Button>
-          ) : null}
-          {reservation.status === 'ARRIVING_TODAY' || reservation.status === 'CONFIRMED' ? (
-            <Button variant="secondary" href={`/reservations/${reservation.id}`} className="px-3">
-              No-Show
-            </Button>
-          ) : null}
-          {canPerform(role, 'reservation.update') || role !== 'FRONT_DESK' ? (
-            <>
-              <Button variant="ghost" href={`/reservations/${reservation.id}/amend`} className="px-3">
-                Amend
-              </Button>
-              <Button variant="ghost" href={`/reservations/${reservation.id}`} className="px-3">
-                Cancel
-              </Button>
-            </>
-          ) : null}
-        </div>
+      <td className="py-3 text-right">
+        <Link
+          href={detailHref}
+          aria-label={`Open booking ${reservation.bookingReference}`}
+          className="inline-flex size-7 items-center justify-center rounded-md text-[var(--color-mid-gray)] hover:bg-[var(--color-line-soft)] hover:text-[var(--color-teal)]"
+        >
+          <ChevronRight className="size-4" />
+        </Link>
       </td>
     </tr>
   );

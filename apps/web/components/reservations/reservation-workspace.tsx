@@ -4,7 +4,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpenText, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, BookOpenText, Search } from 'lucide-react';
 
 import { FilterBar } from '@/components/reservations/filter-bar';
 import { FilterNoResults } from '@/components/reservations/filter-no-results';
@@ -24,11 +24,16 @@ type ReservationListPayload = {
     checkIn: string;
     checkOut: string;
     status: string;
+    source: string;
     sourceLabel: string;
+    nights: number;
   }>;
   nextCursor: string | null;
   total: number;
 };
+
+type SortKey = 'bookingReference' | 'checkIn' | 'checkOut';
+type SortDir = 'asc' | 'desc';
 
 function buildListUrl(params: URLSearchParams) {
   const query = params.toString();
@@ -111,6 +116,53 @@ export function ReservationWorkspace({
     router.replace('/reservations', { scroll: false });
   }
 
+  const [sortKey, setSortKey] = useState<SortKey>('checkIn');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  const sortedReservations = useMemo(() => {
+    const rows = activeData.reservations;
+    const sorted = [...rows].sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'bookingReference') {
+        cmp = (a.bookingReference ?? '').localeCompare(b.bookingReference ?? '');
+      } else if (sortKey === 'checkIn') {
+        cmp = new Date(a.checkIn).getTime() - new Date(b.checkIn).getTime();
+      } else if (sortKey === 'checkOut') {
+        cmp = new Date(a.checkOut).getTime() - new Date(b.checkOut).getTime();
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [activeData.reservations, sortKey, sortDir]);
+
+  function SortHeader({ label, sortBy, align }: { label: string; sortBy: SortKey; align?: 'left' | 'right' }) {
+    const active = sortKey === sortBy;
+    const Icon = active ? (sortDir === 'asc' ? ArrowUp : ArrowDown) : ArrowUpDown;
+    return (
+      <th className={`pb-3 pr-3 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+        <button
+          type="button"
+          onClick={() => toggleSort(sortBy)}
+          className={`inline-flex items-center gap-1 uppercase tracking-[0.12em] ${
+            active ? 'text-[var(--color-charcoal)]' : 'text-[var(--color-mid-gray)]'
+          } hover:text-[var(--color-charcoal)]`}
+        >
+          {label}
+          <Icon className="size-3" />
+        </button>
+      </th>
+    );
+  }
+
   return (
     <div className="space-y-4 px-4 py-[28px] sm:px-8">
       <BaseCard>
@@ -165,19 +217,22 @@ export function ReservationWorkspace({
           <>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left">
-                <thead className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-mid-gray)]">
+                <thead className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-mid-gray)]">
                   <tr>
-                    <th className="pb-3 pr-3">Booking</th>
+                    <SortHeader label="Booking Ref" sortBy="bookingReference" />
                     <th className="pb-3 pr-3">Guest</th>
-                    <th className="pb-3 pr-3">Room</th>
-                    <th className="pb-3 pr-3">Stay</th>
+                    <th className="pb-3 pr-3">Room Type</th>
+                    <SortHeader label="Check-in" sortBy="checkIn" />
+                    <SortHeader label="Check-out" sortBy="checkOut" />
+                    <th className="pb-3 pr-3">Nights</th>
+                    <th className="pb-3 pr-3">Source</th>
                     <th className="pb-3 pr-3">Status</th>
-                    <th className="pb-3">Actions</th>
+                    <th className="pb-3" aria-label="Open" />
                   </tr>
                 </thead>
                 <tbody>
-                  {activeData.reservations.map((reservation) => (
-                    <ReservationListRow key={reservation.id} reservation={reservation} role={role} />
+                  {sortedReservations.map((reservation) => (
+                    <ReservationListRow key={reservation.id} reservation={reservation} />
                   ))}
                 </tbody>
               </table>
