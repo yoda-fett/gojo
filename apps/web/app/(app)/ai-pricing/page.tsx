@@ -1,12 +1,4 @@
 import { redirect } from 'next/navigation';
-import {
-  CalendarHeart,
-  Eye,
-  Gauge,
-  Search,
-  Sparkles,
-  TrendingUp,
-} from 'lucide-react';
 
 import { ComingSoonLanding, type FeatureCard, type RoadmapStep } from '@/components/marketing/coming-soon-landing';
 import { getServerActor } from '@/lib/auth/server-actor';
@@ -15,37 +7,37 @@ export const dynamic = 'force-dynamic';
 
 const FEATURES: FeatureCard[] = [
   {
-    icon: TrendingUp,
+    icon: 'trendingUp',
     iconTint: 'teal',
     title: 'Demand-based suggestions',
     body: 'AI reads booking pace, search trends, and historical fill rates to suggest the right price for each night.',
   },
   {
-    icon: Search,
+    icon: 'search',
     iconTint: 'amber',
     title: 'Competitor rate monitoring',
     body: 'Tracks rates at comparable properties in your area and factors them into every suggestion.',
   },
   {
-    icon: CalendarHeart,
+    icon: 'calendarHeart',
     iconTint: 'teal',
     title: 'Event & seasonal awareness',
     body: 'Jaipur Literature Festival, Diwali, long weekends — AI detects demand spikes before they show in your bookings.',
   },
   {
-    icon: Gauge,
+    icon: 'gauge',
     iconTint: 'coral',
     title: 'Min / max guardrails',
     body: 'Set a floor and ceiling. AI never goes below your cost floor or above your brand ceiling — you own the rules.',
   },
   {
-    icon: Sparkles,
+    icon: 'sparkles',
     iconTint: 'teal',
     title: 'One-click accept or decline',
     body: "Review AI's weekly suggestion in under 3 minutes. Accept all, tweak individual nights, or decline with one tap.",
   },
   {
-    icon: Eye,
+    icon: 'eye',
     iconTint: 'amber',
     title: 'Explainable reasoning',
     body: 'Every suggestion comes with a plain-language reason — so you understand why, not just what.',
@@ -70,7 +62,7 @@ export default async function AiPricingPage() {
       phaseLabel="On the roadmap"
       pageTitle="AI Pricing"
       pageSubtitle="Dynamic rate recommendations powered by demand signals & market data"
-      heroEyebrowIcon={Sparkles}
+      heroEyebrowIcon="sparkles"
       heroEyebrowLabel="AI Pricing · Roadmap"
       heroTitle={
         <>

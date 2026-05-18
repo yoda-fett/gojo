@@ -1,12 +1,4 @@
 import { redirect } from 'next/navigation';
-import {
-  BarChart3,
-  Bell,
-  CalendarRange,
-  Link2,
-  Repeat,
-  Users2,
-} from 'lucide-react';
 
 import { ComingSoonLanding, type FeatureCard, type RoadmapStep } from '@/components/marketing/coming-soon-landing';
 import { getServerActor } from '@/lib/auth/server-actor';
@@ -15,37 +7,37 @@ export const dynamic = 'force-dynamic';
 
 const FEATURES: FeatureCard[] = [
   {
-    icon: Repeat,
+    icon: 'repeat',
     iconTint: 'teal',
     title: 'Real-time inventory sync',
     body: 'When a booking comes in on any channel, all others update instantly. No manual changes, no double-bookings.',
   },
   {
-    icon: BarChart3,
+    icon: 'barChart3',
     iconTint: 'amber',
     title: 'Rate parity control',
     body: 'Set rate rules once. Apply different markups per channel — or enforce parity automatically across all platforms.',
   },
   {
-    icon: BarChart3,
+    icon: 'barChart3',
     iconTint: 'teal',
     title: 'Channel performance dashboard',
     body: 'See revenue, bookings, and cancellations per channel side by side — know which OTA earns you the most.',
   },
   {
-    icon: Bell,
+    icon: 'bell',
     iconTint: 'coral',
     title: 'Booking alerts',
     body: 'Get notified the moment a booking or cancellation arrives from any channel — before your guest contacts you.',
   },
   {
-    icon: CalendarRange,
+    icon: 'calendarRange',
     iconTint: 'teal',
     title: 'Availability calendar',
     body: 'A single calendar showing availability across all channels. Block dates, set stop-sell, or open rooms with one click.',
   },
   {
-    icon: Users2,
+    icon: 'users2',
     iconTint: 'amber',
     title: 'MakeMyTrip Business integration',
     body: "Deep integration with MMT's partner API — including corporate rate plans, GST invoicing, and direct settlement.",
@@ -70,7 +62,7 @@ export default async function ChannelsPage() {
       phaseLabel="Coming in Phase 3"
       pageTitle="Channel Manager"
       pageSubtitle="Sync inventory & rates across all OTAs from one place"
-      heroEyebrowIcon={Link2}
+      heroEyebrowIcon="link2"
       heroEyebrowLabel="Channel Manager · Phase 3"
       heroTitle={
         <>

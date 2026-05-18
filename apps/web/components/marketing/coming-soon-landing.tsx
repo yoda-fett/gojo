@@ -2,14 +2,49 @@
 
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Bell, Clock, type LucideIcon } from 'lucide-react';
+import {
+  BarChart3,
+  Bell,
+  CalendarHeart,
+  CalendarRange,
+  Clock,
+  Eye,
+  Gauge,
+  Link2,
+  Repeat,
+  Search,
+  Sparkles,
+  TrendingUp,
+  Users2,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { PageShell } from '@/components/layout/page-shell';
 import { BaseCard } from '@/components/ui/base-card';
 
+// Icons referenced by string key so this component can be rendered from a
+// Server Component without crossing the RSC → Client serialization boundary
+// with function references.
+const ICONS = {
+  barChart3: BarChart3,
+  bell: Bell,
+  calendarHeart: CalendarHeart,
+  calendarRange: CalendarRange,
+  eye: Eye,
+  gauge: Gauge,
+  link2: Link2,
+  repeat: Repeat,
+  search: Search,
+  sparkles: Sparkles,
+  trendingUp: TrendingUp,
+  users2: Users2,
+} satisfies Record<string, LucideIcon>;
+
+export type IconKey = keyof typeof ICONS;
+
 export type FeatureCard = {
-  icon: LucideIcon;
+  icon: IconKey;
   iconTint?: 'teal' | 'amber' | 'coral';
   title: string;
   body: string;
@@ -28,7 +63,7 @@ export type ComingSoonLandingProps = {
   pageTitle: string;
   pageSubtitle: string;
   // Hero
-  heroEyebrowIcon?: LucideIcon;
+  heroEyebrowIcon?: IconKey;
   heroEyebrowLabel: string;
   heroTitle: ReactNode;
   heroDescription: string;
@@ -55,7 +90,7 @@ const ICON_TINTS: Record<NonNullable<FeatureCard['iconTint']>, { bg: string; fg:
 };
 
 export function ComingSoonLanding(props: ComingSoonLandingProps) {
-  const HeroIcon = props.heroEyebrowIcon;
+  const HeroIcon = props.heroEyebrowIcon ? ICONS[props.heroEyebrowIcon] : null;
   return (
     <PageShell
       header={
@@ -116,7 +151,7 @@ export function ComingSoonLanding(props: ComingSoonLandingProps) {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {props.features.map((feature) => {
-              const Icon = feature.icon;
+              const Icon = ICONS[feature.icon];
               const tint = ICON_TINTS[feature.iconTint ?? 'teal'];
               return (
                 <BaseCard key={feature.title} className="!p-5">
