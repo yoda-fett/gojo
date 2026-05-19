@@ -135,6 +135,18 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   );
 }
 
+function initials(name: string): string {
+  return (
+    name
+      .split(/\s+/)
+      .map((p) => p[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '·'
+  );
+}
+
 // ─── Arrivals / Departures shared bits ────────────────────────────────────
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -188,7 +200,7 @@ function ArrivalsCard({ propertyId }: { propertyId: string }) {
 
   const items = data?.items ?? [];
   const checkedIn = items.filter((i) => i.status === 'CHECKED_IN').length;
-
+  
   return (
     <BaseCard
       className="h-full"
@@ -216,12 +228,17 @@ function ArrivalsCard({ propertyId }: { propertyId: string }) {
             <li key={item.reservationId}>
               <Link
                 href={`/reservations/${item.reservationId}`}
-                className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2.5 hover:bg-[var(--color-off-white)]"
+                className="-mx-2 flex items-center justify-between gap-3 rounded-md px-1 py-2.5 hover:bg-[var(--color-off-white)]"
               >
                 <div className="min-w-0">
+                  <p className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#EAF6F2] text-[12px] font-bold tracking-[0.04em] text-[#0A6B58]">
+                  {initials(item.guestName)}
+                  </p>
+                </div>
+                <div className="flex-1 min-w-0">
                   <p className="truncate text-[13.5px] font-semibold text-[var(--color-charcoal)]">{item.guestName}</p>
                   <p className="mt-0.5 truncate text-[12px] text-[var(--color-mid-gray)]">
-                    {item.roomNumber} · {item.roomTypeName} · {SOURCE_LABEL[item.source] ?? item.source}
+                    {item.roomNumber} · {item.roomTypeName} · {SOURCE_LABEL[item.source] ?? item.source} 
                   </p>
                 </div>
                 {arrivalStatusPill(item)}
@@ -247,7 +264,7 @@ function DeparturesCard({ propertyId }: { propertyId: string }) {
 
   const items = data?.items ?? [];
   const dueOut = items.filter((i) => i.status !== 'CHECKED_OUT').length;
-
+  
   return (
     <BaseCard
       className="h-full"
@@ -278,6 +295,11 @@ function DeparturesCard({ propertyId }: { propertyId: string }) {
                 className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2.5 hover:bg-[var(--color-off-white)]"
               >
                 <div className="min-w-0">
+                  <p className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#EAF6F2] text-[12px] font-bold tracking-[0.04em] text-[#0A6B58]">
+                  {initials(item.guestName)}
+                  </p>
+                </div>
+                <div className="flex-1 min-w-0">
                   <p className="truncate text-[13.5px] font-semibold text-[var(--color-charcoal)]">{item.guestName}</p>
                   <p className="mt-0.5 truncate text-[12px] text-[var(--color-mid-gray)]">
                     {item.roomNumber} · {item.roomTypeName} · {formatInr(item.folioTotal)}

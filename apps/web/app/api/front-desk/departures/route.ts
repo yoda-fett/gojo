@@ -56,16 +56,20 @@ export const GET = withAuth(async (_req, actor) => {
   const roomMap = new Map(rooms.map((r) => [r.id, r.number]));
   const roomTypeMap = new Map(roomTypes.map((rt) => [rt.id, rt.name]));
 
-  const items = reservations.map((r) => ({
-    reservationId: r.id,
-    bookingReference: r.bookingReference,
-    guestName: guestMap.get(r.guestId) ?? 'Guest',
-    roomNumber: roomMap.get(r.roomId) ?? '',
-    roomTypeName: roomTypeMap.get(r.roomTypeId) ?? 'Room',
-    folioTotal: totalByReservation.get(r.id) ?? 0,
-    checkOut: r.checkOut,
-    status: r.status,
-  }));
+  const items = reservations.map((r) => {
+    const nights = Math.max(1, Math.round((r.checkOut.getTime() - r.checkIn.getTime()) / (24 * 60 * 60 * 1000)));
+    return {
+      reservationId: r.id,
+      bookingReference: r.bookingReference,
+      guestName: guestMap.get(r.guestId) ?? 'Guest',
+      roomNumber: roomMap.get(r.roomId) ?? '',
+      roomTypeName: roomTypeMap.get(r.roomTypeId) ?? 'Room',
+      folioTotal: totalByReservation.get(r.id) ?? 0,
+      checkOut: r.checkOut,
+      status: r.status,
+      nights,
+    };
+  });
 
   return NextResponse.json({ items });
 }, ['OWNER', 'MANAGER', 'FRONT_DESK']);

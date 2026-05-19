@@ -29,7 +29,11 @@ export default async function CrsPage({ searchParams }: { searchParams?: SearchP
   }
 
   const params = (await searchParams) ?? {};
-  const from = typeof params.from === 'string' ? params.from : todayIST();
+  // Default window centres around today: 7 days back + today + 6 days forward
+  // so today sits at column 8 of a 14-day view.
+  const todayKey = todayIST();
+  const defaultFrom = formatISTDateKey(addDays(new Date(`${todayKey}T00:00:00+05:30`), -7));
+  const from = typeof params.from === 'string' ? params.from : defaultFrom;
   const to = typeof params.to === 'string' ? params.to : formatISTDateKey(addDays(new Date(`${from}T00:00:00+05:30`), 13));
   const data = await getCalendarWindow(actor.propertyId, from, to);
 

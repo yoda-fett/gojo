@@ -43,7 +43,7 @@ export function DateNav({ from, to }: { from: string; to: string }) {
         type="button"
         style={NAV_BTN_STYLE}
         className="hover:!border-[#1DA888] hover:!text-[#1DA888]"
-        onClick={() => pushWindow(formatISTDateKey(subDays(toDate(from), days)), formatISTDateKey(subDays(toDate(to), days)))}
+        onClick={() => pushWindow(formatISTDateKey(subDays(toDate(from), days - 8)), formatISTDateKey(subDays(toDate(to), days - 8)))}
       >
         ← Prev
       </button>
@@ -59,7 +59,7 @@ export function DateNav({ from, to }: { from: string; to: string }) {
         type="button"
         style={NAV_BTN_STYLE}
         className="hover:!border-[#1DA888] hover:!text-[#1DA888]"
-        onClick={() => pushWindow(formatISTDateKey(addDays(toDate(from), days)), formatISTDateKey(addDays(toDate(to), days)))}
+        onClick={() => pushWindow(formatISTDateKey(addDays(toDate(from), days - 8)), formatISTDateKey(addDays(toDate(to), days - 8)))}
       >
         Next →
       </button>

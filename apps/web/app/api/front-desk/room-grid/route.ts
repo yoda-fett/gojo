@@ -58,6 +58,13 @@ export const GET = withAuth(async (_req, actor) => {
     if (!reservationByRoom.has(r.roomId)) reservationByRoom.set(r.roomId, r);
   }
 
+  function nightsBetween(from: Date, to: Date): number {
+    return Math.max(1, Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000)));
+  }
+
+  // Today's IST-midnight, used to derive "Night X of Y" for in-house guests.
+  const todayMidnight = dayStart;
+
   const groups = roomTypes.map((rt) => {
     const inType = rooms.filter((r) => r.roomTypeId === rt.id);
     return {
@@ -76,6 +83,10 @@ export const GET = withAuth(async (_req, actor) => {
           reservation.checkOut >= dayStart &&
           reservation.checkOut <= dayEnd;
         const checkedIn = !!reservation && reservation.status === 'CHECKED_IN';
+        const totalNights = reservation ? nightsBetween(reservation.checkIn, reservation.checkOut) : null;
+        const nightNumber = reservation && checkedIn
+          ? Math.min(totalNights ?? 1, Math.max(1, nightsBetween(reservation.checkIn, todayMidnight) + 1))
+          : null;
         return {
           roomId: room.id,
           roomNumber: room.number,
@@ -83,6 +94,11 @@ export const GET = withAuth(async (_req, actor) => {
           stateVersion: room.stateVersion,
           guestName: reservation ? (guestMap.get(reservation.guestId) ?? null) : null,
           reservationId: reservation?.id ?? null,
+          bookingReference: reservation?.bookingReference ?? null,
+          checkIn: reservation?.checkIn ?? null,
+          checkOut: reservation?.checkOut ?? null,
+          nightNumber,
+          totalNights,
           visualState: deriveVisualState(room, { arrivingToday, departingToday, checkedIn }),
         };
       }),
