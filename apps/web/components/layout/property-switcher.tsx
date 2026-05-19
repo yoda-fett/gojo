@@ -37,22 +37,38 @@ export function PropertySwitcher({ current, currentPropertyId, options }: Props)
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
+  // Clear the "Switching…" indicator once the parent layout re-renders with
+  // the new active property (server-component refresh has completed).
+  useEffect(() => {
+    setSwitching(null);
+  }, [currentPropertyId]);
+
   async function selectProperty(propertyId: string) {
     if (propertyId === currentPropertyId || switching) return;
     setSwitching(propertyId);
-    const res = await fetch('/api/auth/select-property', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ propertyId }),
-    });
-    if (!res.ok) {
+    try {
+      const res = await fetch('/api/auth/select-property', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ propertyId }),
+      });
+      if (!res.ok) {
+        setSwitching(null);
+        return;
+      }
+      setOpen(false);
+      // Stay on the current route but force a full reload so both server-
+      // rendered data AND client caches (React Query, etc.) pick up the new
+      // property context. router.refresh() alone doesn't bust client caches.
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      } else {
+        router.refresh();
+      }
+    } catch {
       setSwitching(null);
-      return;
     }
-    setOpen(false);
-    router.push('/dashboard');
-    router.refresh();
   }
 
   return (
@@ -63,7 +79,7 @@ export function PropertySwitcher({ current, currentPropertyId, options }: Props)
         aria-expanded={open}
         aria-haspopup={hasMultiple ? 'menu' : undefined}
         disabled={!hasMultiple}
-        className="flex w-full items-center justify-between rounded-[8px] border border-white/[0.04] bg-white/[0.06] px-3 py-[10px] text-left transition-colors hover:bg-white/[0.08] disabled:cursor-default disabled:hover:bg-white/[0.06]"
+        className="flex w-full cursor-pointer items-center justify-between rounded-[8px] border border-white/[0.04] bg-white/[0.06] px-3 py-[10px] text-left transition-colors hover:bg-white/[0.08] disabled:cursor-default disabled:hover:bg-white/[0.06]"
       >
         <div className="min-w-0">
           <div className="truncate text-[13px] font-semibold text-white">{current.name}</div>
@@ -98,7 +114,7 @@ export function PropertySwitcher({ current, currentPropertyId, options }: Props)
                 role="menuitem"
                 onClick={() => selectProperty(opt.propertyId)}
                 disabled={active || Boolean(switching)}
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors hover:bg-white/[0.05] disabled:hover:bg-transparent"
+                className="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 text-left transition-colors hover:bg-white/[0.05] disabled:cursor-default disabled:hover:bg-transparent"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
