@@ -2,7 +2,7 @@
 import { ReportCard } from '@/components/reports/report-card';
 import { ReportKpiCard } from '@/components/reports/report-kpi-card';
 import { WeekdayPatternBars } from '@/components/reports/weekday-pattern-bars';
-import { CalendarHeatmap } from '@/components/reports/calendar-heatmap';
+import { CalendarMonthCard } from './_components/calendar-month-card';
 import { BookingSourceDonut } from '@/components/reports/booking-source-donut';
 import { InsightsPanel } from '@/components/reports/insights-panel';
 import { OccupancyTrendCard } from './_components/occupancy-trend-card';
@@ -115,9 +115,7 @@ export default async function OccupancyReportPage({ searchParams }: { searchPara
           </div>
 
           <div className="space-y-5">
-          <ReportCard title="Calendar View" subtitle={`Daily occupancy % — ${(() => { const [y, m] = range.to.split('-').map(Number); return new Date(y, (m ?? 1) - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' }); })()}`} bodyPadding={false}>
-            <CalendarHeatmap data={data.byDay} />
-          </ReportCard>
+          <CalendarMonthCard />
           <ReportCard title="Booking Source Mix" subtitle="By room nights · last 30 days">
             <BookingSourceDonut data={data.bySource} valueKey="roomNights" totalLabel="Room Nights" centerValue={String(data.kpis.totalRoomNights)} variant="occupancy" />
           </ReportCard>

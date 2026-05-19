@@ -34,6 +34,7 @@ type ArrivalItem = {
   source: string;
   checkIn: string;
   status: string;
+  nights: number;
 };
 
 type DepartureItem = {
@@ -238,7 +239,7 @@ function ArrivalsCard({ propertyId }: { propertyId: string }) {
                 <div className="flex-1 min-w-0">
                   <p className="truncate text-[13.5px] font-semibold text-[var(--color-charcoal)]">{item.guestName}</p>
                   <p className="mt-0.5 truncate text-[12px] text-[var(--color-mid-gray)]">
-                    {item.roomNumber} · {item.roomTypeName} · {SOURCE_LABEL[item.source] ?? item.source} 
+                    {item.roomNumber} · {item.roomTypeName} · {item.nights} {item.nights === 1 ? 'night' : 'nights'} · {SOURCE_LABEL[item.source] ?? item.source}
                   </p>
                 </div>
                 {arrivalStatusPill(item)}

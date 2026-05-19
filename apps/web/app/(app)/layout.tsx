@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { prisma } from '@gojo/db';
 
 import { Sidebar, type SidebarProperty, type SidebarUser } from '@/components/layout/sidebar';
+import type { PropertySwitcherOption } from '@/components/layout/property-switcher';
 import { SuspensionNotice } from '@/components/subscription/suspension-notice';
 import { getServerActor } from '@/lib/auth/server-actor';
 
@@ -11,15 +12,20 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   let user: SidebarUser | undefined;
   let property: SidebarProperty | undefined;
+  let propertyOptions: PropertySwitcherOption[] = [];
 
   let suspended = false;
   let suspendedPropertyName: string | null = null;
 
   if (actor) {
-    const [userRow, propertyRow, subscription] = await Promise.all([
+    const [userRow, propertyRow, subscription, accessRows] = await Promise.all([
       prisma.user.findUnique({ where: { id: actor.userId }, select: { name: true } }),
       prisma.property.findUnique({ where: { id: actor.propertyId }, select: { name: true, city: true, state: true } }),
       prisma.subscription.findUnique({ where: { propertyId: actor.propertyId }, select: { status: true } }),
+      prisma.propertyAccess.findMany({
+        where: { userId: actor.userId, deletedAt: null, revokedAt: null, status: 'ACTIVE' },
+        select: { propertyId: true, role: true },
+      }),
     ]);
 
     if (userRow?.name) {
@@ -32,6 +38,29 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     }
     if (subscription?.status === 'SUSPENDED') {
       suspended = true;
+    }
+
+    // Hydrate the multi-property options for the sidebar switcher.
+    if (accessRows.length > 0) {
+      const otherProps = await prisma.property.findMany({
+        where: { id: { in: accessRows.map((a) => a.propertyId) }, deletedAt: null },
+        select: { id: true, name: true, city: true, state: true },
+      });
+      const propMap = new Map(otherProps.map((p) => [p.id, p]));
+      propertyOptions = accessRows
+        .map((a) => {
+          const p = propMap.get(a.propertyId);
+          if (!p) return null;
+          const location = [p.city, p.state].filter(Boolean).join(', ') || null;
+          return {
+            propertyId: a.propertyId,
+            name: p.name,
+            location,
+            role: a.role,
+          } satisfies PropertySwitcherOption;
+        })
+        .filter((x): x is PropertySwitcherOption => x !== null)
+        .sort((l, r) => l.name.localeCompare(r.name));
     }
   }
 
@@ -48,6 +77,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         {...(actor?.role ? { role: actor.role } : {})}
         {...(user ? { user } : {})}
         {...(property ? { property } : {})}
+        {...(actor?.propertyId ? { currentPropertyId: actor.propertyId } : {})}
+        propertyOptions={propertyOptions}
       />
       <main className="min-h-screen flex-1 xl:ml-[240px]">{children}</main>
     </div>

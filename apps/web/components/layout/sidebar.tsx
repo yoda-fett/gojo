@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 
 import { LogoutButton } from './logout-button';
+import { PropertySwitcher, type PropertySwitcherOption } from './property-switcher';
 
 type PillVariant = 'soon' | 'phase3' | 'roadmap';
 
@@ -343,10 +344,14 @@ export function Sidebar({
   role,
   user,
   property,
+  currentPropertyId,
+  propertyOptions,
 }: {
   role?: Role;
   user?: SidebarUser;
   property?: SidebarProperty;
+  currentPropertyId?: string;
+  propertyOptions?: PropertySwitcherOption[];
 }) {
   const initial = user?.name?.trim()?.[0]?.toUpperCase() ?? 'U';
   return (
@@ -364,20 +369,13 @@ export function Sidebar({
         </Link>
       </div>
 
-      {/* Property selector */}
-      {property ? (
-        <button
-          type="button"
-          className="mx-3 mb-1 mt-3 flex items-center justify-between rounded-[8px] border border-white/[0.04] bg-white/[0.06] px-3 py-[10px] text-left transition-colors hover:bg-white/[0.08]"
-        >
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-semibold text-white">{property.name}</div>
-            {property.location ? (
-              <div className="mt-[1px] truncate text-[11px] text-[var(--color-mid-gray)]">{property.location}</div>
-            ) : null}
-          </div>
-          <ChevronDown className="size-[10px] shrink-0 text-[var(--color-mid-gray)]" strokeWidth={2.5} aria-hidden="true" />
-        </button>
+      {/* Property selector — dropdown when user has access to >1 property. */}
+      {property && currentPropertyId && propertyOptions ? (
+        <PropertySwitcher
+          current={{ name: property.name, location: property.location ?? null }}
+          currentPropertyId={currentPropertyId}
+          options={propertyOptions}
+        />
       ) : null}
 
       <SidebarNav {...(role ? { role } : {})} />

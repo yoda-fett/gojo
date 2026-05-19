@@ -644,12 +644,15 @@ function SidePanel({
                   <p className="truncate text-[12px] text-[var(--color-mid-gray)]">
                     {r.bookingReference ?? r.reservationId.slice(-6).toUpperCase()}
                     {nightsLabel ? ` · ${nightsLabel}` : ''}
+                    {r.roomNumber ? ` · ${r.roomNumber}` : ''}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1">
+                  {/*
                   {r.roomNumber ? (
                     <span className="text-[14px] font-bold text-[var(--color-charcoal)]">Rm {r.roomNumber}</span>
                   ) : null}
+                  */}
                   <span className={`rounded-[6px] px-2 py-0.5 text-[11.5px] font-semibold ${chip}`}>{chipLabel}</span>
                 </div>
               </Link>
