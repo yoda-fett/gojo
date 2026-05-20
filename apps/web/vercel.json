@@ -3,11 +3,7 @@
     "app/api/**/*": {
       "includeFiles": "src/generated/client/**"
     }
-  }
-}
-
-// apps/web/vercel.json
-{
+  },
   "crons": [
     { "path": "/api/internal/hold-sweep",                "schedule": "* * * * *"   },
     { "path": "/api/internal/sweep-expired-blocks",      "schedule": "0 * * * *"   },
@@ -15,4 +11,3 @@
     { "path": "/api/internal/reconcile",                 "schedule": "30 20 * * *" }
   ]
 }
-```
