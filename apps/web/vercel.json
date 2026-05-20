@@ -7,7 +7,7 @@
   "crons": [
     { "path": "/api/internal/hold-sweep",                "schedule": "0 0 * * *"   },
     { "path": "/api/internal/sweep-expired-blocks",      "schedule": "0 0 * * *"   },
-    { "path": "/api/internal/expire-rotating-secrets",   "schedule": "*/30 0 * * *"},
+    { "path": "/api/internal/expire-rotating-secrets",   "schedule": "30 0 * * *"},
     { "path": "/api/internal/reconcile",                 "schedule": "30 20 * * *" }
   ]
 }
