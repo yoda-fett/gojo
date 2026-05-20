@@ -4,9 +4,15 @@ generator client {
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
+//datasource db {
+//  provider = "postgresql"
+//  url      = env("DATABASE_URL")
+//}
+
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // 6543 pooler — runtime
+  directUrl = env("DIRECT_URL")     // 5432 session pooler — migrations
 }
 
 model Property {
