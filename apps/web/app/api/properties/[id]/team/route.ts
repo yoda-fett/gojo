@@ -14,7 +14,8 @@ import { requireRole } from '@/lib/auth/require-role';
 
 const inviteSchema = z.object({
   phone: z.string().regex(/^\+?[0-9]{10,15}$/),
-  role: z.enum(['MANAGER', 'FRONT_DESK', 'HOUSEKEEPING']),
+  // OWNER is invitable as a co-owner — full owner access to this property.
+  role: z.enum(['OWNER', 'MANAGER', 'FRONT_DESK', 'HOUSEKEEPING']),
 });
 
 type Context = { params: Promise<{ id: string }> };

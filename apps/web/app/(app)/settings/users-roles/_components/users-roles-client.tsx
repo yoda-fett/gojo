@@ -35,7 +35,14 @@ const MUTED = '#9EAEAC';
 const BORDER = '#E8EFEE';
 const SOFT = '#F4F9F8';
 
-const INVITABLE_ROLES = ['MANAGER', 'FRONT_DESK', 'HOUSEKEEPING'] as const;
+const INVITABLE_ROLES = ['OWNER', 'MANAGER', 'FRONT_DESK', 'HOUSEKEEPING'] as const;
+
+const ROLE_LABELS: Record<string, string> = {
+  OWNER: 'Co-owner',
+  MANAGER: 'Manager',
+  FRONT_DESK: 'Front desk',
+  HOUSEKEEPING: 'Housekeeping',
+};
 
 function initials(row: Row): string {
   if (row.displayName) {
@@ -70,6 +77,10 @@ export function UsersRolesClient({
     const pending = rows.filter((r) => r.status === 'PENDING').length;
     return { total: rows.length, active, pending };
   }, [rows]);
+
+  // More than one OWNER on this property → owners are shown as "Co-owner";
+  // a sole owner is shown as "Owner".
+  const multipleOwners = rows.filter((r) => r.role === 'OWNER').length > 1;
 
   async function refetch() {
     const res = await fetch(`/api/properties/${propertyId}/team`, { cache: 'no-store' });
@@ -201,6 +212,62 @@ export function UsersRolesClient({
           </button>
         </div>
 
+        {showForm && (
+          <div
+            style={{
+              margin: '20px 20px 0',
+              border: `1px dashed ${TEAL}`,
+              borderRadius: 10,
+              background: SOFT,
+              padding: 18,
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#0F7A5E', marginBottom: 14 }}>✎ Invite team member</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px' }}>
+              <Field label="Mobile number" hint="10-digit Indian mobile · the OTP invitation is sent here">
+                <input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  style={input}
+                />
+              </Field>
+              <Field label="Role" hint="Co-owner has full owner access to this property">
+                <select value={role} onChange={(e) => setRole(e.target.value as any)} style={input}>
+                  {INVITABLE_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABELS[r] ?? r}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <div
+              style={{
+                marginTop: 14,
+                background: '#F4F9F8',
+                border: '1px solid #D6F2EA',
+                borderLeft: `3px solid ${TEAL}`,
+                padding: '10px 14px',
+                borderRadius: 6,
+                fontSize: 12,
+                color: '#0F7A5E',
+              }}
+            >
+              <strong>OTP-based invitation.</strong> A <code>PENDING</code> access row is created and an OTP link is
+              sent to this number. The invitee joins by entering the OTP on sign-in.
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+              <button type="button" onClick={() => setShowForm(false)} disabled={busy} style={btnGhost}>
+                Cancel
+              </button>
+              <button type="button" onClick={() => void invite()} disabled={busy} style={btnPrimary}>
+                Send invitation
+              </button>
+            </div>
+          </div>
+        )}
+
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#FAFCFC' }}>
@@ -323,62 +390,6 @@ export function UsersRolesClient({
             </button>
           </div>
         )}
-
-        {showForm && (
-          <div
-            style={{
-              margin: '0 20px 20px',
-              border: `1px dashed ${TEAL}`,
-              borderRadius: 10,
-              background: SOFT,
-              padding: 18,
-            }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#0F7A5E', marginBottom: 14 }}>✎ Invite team member</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px' }}>
-              <Field label="Mobile number" hint="10-digit Indian mobile · the OTP invitation is sent here">
-                <input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  style={input}
-                />
-              </Field>
-              <Field label="Role" hint="OWNER is not selectable — assigned only at property creation">
-                <select value={role} onChange={(e) => setRole(e.target.value as any)} style={input}>
-                  {INVITABLE_ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-            <div
-              style={{
-                marginTop: 14,
-                background: '#F4F9F8',
-                border: '1px solid #D6F2EA',
-                borderLeft: `3px solid ${TEAL}`,
-                padding: '10px 14px',
-                borderRadius: 6,
-                fontSize: 12,
-                color: '#0F7A5E',
-              }}
-            >
-              <strong>OTP-based invitation.</strong> A <code>PENDING</code> access row is created and an OTP link is
-              sent to this number. The invitee joins by entering the OTP on sign-in.
-            </div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setShowForm(false)} disabled={busy} style={btnGhost}>
-                Cancel
-              </button>
-              <button type="button" onClick={() => void invite()} disabled={busy} style={btnPrimary}>
-                Send invitation
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Co-owner / multi-property card (AC5) */}
@@ -430,7 +441,12 @@ export function UsersRolesClient({
                     {p.isCurrent ? ' · current property' : ''}
                   </div>
                 </div>
-                <RolePill role={p.role as Row['role']} />
+                <RolePill
+                  role={p.role as Row['role']}
+                  label={
+                    p.role === 'OWNER' ? (multipleOwners ? 'Co-owner' : 'Owner') : undefined
+                  }
+                />
               </div>
             ))}
           </div>
@@ -453,7 +469,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-function RolePill({ role }: { role: Row['role'] }) {
+function RolePill({ role, label }: { role: Row['role']; label?: string }) {
   const map = {
     OWNER: { bg: '#E8DAF2', fg: '#6B3FA0' },
     MANAGER: { bg: '#DCE9F2', fg: '#3A6FA0' },
@@ -473,7 +489,7 @@ function RolePill({ role }: { role: Row['role'] }) {
         color: c.fg,
       }}
     >
-      {role}
+      {label ?? role}
     </span>
   );
 }

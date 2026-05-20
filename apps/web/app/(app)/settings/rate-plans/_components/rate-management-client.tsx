@@ -21,6 +21,10 @@ const BORDER = '#E8EFEE';
 const SOFT = '#F4F9F8';
 const CORAL = '#B5572A';
 
+// Sentinel for the Rate Plans form "Applies to" field — fans out to one rate
+// plan per room type on save.
+const ALL_ROOMS = '__ALL__';
+
 type RoomTypeRef = { id: string; name: string };
 type FloorRow = {
   id: string;
@@ -94,6 +98,10 @@ function FloorRateCard({ rows }: { rows: FloorRow[] }) {
     const value = Number(draft[row.id]);
     if (!Number.isFinite(value) || value <= 0) {
       setMessage('Enter a positive floor rate.');
+      return;
+    }
+    if (value > row.baseRate) {
+      setMessage(`Floor rate for ${row.name} cannot be higher than its rack rate (${inr(row.baseRate)}).`);
       return;
     }
     setSaving(row.id);
@@ -186,22 +194,49 @@ function RatePlansCard({ initial, roomTypes }: { initial: RatePlanRow[]; roomTyp
   }
 
   async function save() {
-    const payload = {
-      name: form.name.trim(),
-      roomTypeId: form.roomTypeId,
-      modifierType: form.modifierType,
-      modifierValue: Number(form.modifierValue),
-    };
-    if (!payload.name || !payload.roomTypeId || !Number.isFinite(payload.modifierValue) || payload.modifierValue <= 0) {
+    const name = form.name.trim();
+    const modifierValue = Number(form.modifierValue);
+    const isEdit = Boolean(editing && 'id' in editing && editing.id);
+
+    if (!name || !form.roomTypeId || !Number.isFinite(modifierValue) || modifierValue <= 0) {
       setError('Fill all fields with valid values.');
       return;
     }
-    if (payload.modifierType === 'PERCENTAGE' && payload.modifierValue > 100) {
+    if (form.modifierType === 'PERCENTAGE' && modifierValue > 100) {
       setError('PERCENTAGE must be 0–100.');
       return;
     }
-    const url = editing && 'id' in editing && editing.id ? `/api/rate-plans/${editing.id}` : '/api/rate-plans';
-    const method = editing && 'id' in editing && editing.id ? 'PUT' : 'POST';
+
+    // "All rooms" — create one rate plan per room type in a single action.
+    if (form.roomTypeId === ALL_ROOMS) {
+      if (isEdit) {
+        setError('Pick a specific room type to edit an existing rate plan.');
+        return;
+      }
+      if (roomTypes.length === 0) {
+        setError('Add a room type first.');
+        return;
+      }
+      for (const rt of roomTypes) {
+        const res = await fetch('/api/rate-plans', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, roomTypeId: rt.id, modifierType: form.modifierType, modifierValue }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          setError(err?.message ?? `Save failed (${res.status})`);
+          return;
+        }
+      }
+      setEditing(null);
+      router.refresh();
+      return;
+    }
+
+    const payload = { name, roomTypeId: form.roomTypeId, modifierType: form.modifierType, modifierValue };
+    const url = isEdit ? `/api/rate-plans/${(editing as RatePlanRow).id}` : '/api/rate-plans';
+    const method = isEdit ? 'PUT' : 'POST';
     const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -227,6 +262,37 @@ function RatePlansCard({ initial, roomTypes }: { initial: RatePlanRow[]; roomTyp
       subtitle="Story 2.4 · named modifiers applied to a room type's base rate"
       actions={<button onClick={openNew} style={btn(TEAL, 'sm')}>+ Add rate plan</button>}
     >
+      {editing ? (
+        <div style={inlineForm()}>
+          <div style={inlineFormTitle()}>✎ {editing && 'id' in editing && editing.id ? 'Edit' : 'Add'} rate plan</div>
+          <FieldGrid>
+            <Field label="Plan name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={input()} /></Field>
+            <Field label="Applies to room type">
+              <select value={form.roomTypeId} onChange={(e) => setForm({ ...form, roomTypeId: e.target.value })} style={input()}>
+                <option value={ALL_ROOMS}>All rooms</option>
+                {roomTypes.map((rt) => <option key={rt.id} value={rt.id}>{rt.name}</option>)}
+              </select>
+            </Field>
+            <Field label="Modifier type">
+              <Seg
+                value={form.modifierType}
+                options={[{ value: 'FLAT', label: 'FLAT ₹' }, { value: 'PERCENTAGE', label: 'PERCENTAGE %' }]}
+                onChange={(v) => setForm({ ...form, modifierType: v as any })}
+              />
+            </Field>
+            <Field label="Modifier value" hint={form.modifierType === 'PERCENTAGE' ? '0–100' : 'Positive ₹ amount'}>
+              <input type="number" value={form.modifierValue} onChange={(e) => setForm({ ...form, modifierValue: e.target.value })} style={input()} />
+            </Field>
+          </FieldGrid>
+          <ScopeBanner>The resulting rate is always clamped to the room type's <strong>floor rate</strong> — a rate plan can never sell below it.</ScopeBanner>
+          {error ? <div style={{ color: CORAL, fontSize: 12, marginTop: 8 }}>{error}</div> : null}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
+            <button onClick={() => setEditing(null)} style={btn('#fff', undefined, CHARCOAL)}>Cancel</button>
+            <button onClick={save} style={btn(TEAL)}>Save rate plan</button>
+          </div>
+        </div>
+      ) : null}
+
       {initial.length === 0 ? <Empty>No rate plans yet.</Empty> : (
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
@@ -250,36 +316,6 @@ function RatePlansCard({ initial, roomTypes }: { initial: RatePlanRow[]; roomTyp
           </tbody>
         </table>
       )}
-
-      {editing ? (
-        <div style={inlineForm()}>
-          <div style={inlineFormTitle()}>✎ {editing && 'id' in editing && editing.id ? 'Edit' : 'Add'} rate plan</div>
-          <FieldGrid>
-            <Field label="Plan name"><input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={input()} /></Field>
-            <Field label="Applies to room type">
-              <select value={form.roomTypeId} onChange={(e) => setForm({ ...form, roomTypeId: e.target.value })} style={input()}>
-                {roomTypes.map((rt) => <option key={rt.id} value={rt.id}>{rt.name}</option>)}
-              </select>
-            </Field>
-            <Field label="Modifier type">
-              <Seg
-                value={form.modifierType}
-                options={[{ value: 'FLAT', label: 'FLAT ₹' }, { value: 'PERCENTAGE', label: 'PERCENTAGE %' }]}
-                onChange={(v) => setForm({ ...form, modifierType: v as any })}
-              />
-            </Field>
-            <Field label="Modifier value" hint={form.modifierType === 'PERCENTAGE' ? '0–100' : 'Positive ₹ amount'}>
-              <input type="number" value={form.modifierValue} onChange={(e) => setForm({ ...form, modifierValue: e.target.value })} style={input()} />
-            </Field>
-          </FieldGrid>
-          <ScopeBanner>The resulting rate is always clamped to the room type's <strong>floor rate</strong> — a rate plan can never sell below it.</ScopeBanner>
-          {error ? <div style={{ color: CORAL, fontSize: 12, marginTop: 8 }}>{error}</div> : null}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
-            <button onClick={() => setEditing(null)} style={btn('#fff', undefined, CHARCOAL)}>Cancel</button>
-            <button onClick={save} style={btn(TEAL)}>Save rate plan</button>
-          </div>
-        </div>
-      ) : null}
     </Card>
   );
 }
@@ -378,33 +414,6 @@ function MultipliersCard({ initial, roomTypes }: { initial: MultiplierRow[]; roo
       subtitle="Seasonal &amp; channel overrides that scale rates on top of plans"
       actions={<button onClick={openNew} style={btn(TEAL, 'sm')}>+ Add multiplier</button>}
     >
-      {initial.length === 0 ? <Empty>No multipliers yet.</Empty> : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: '#FAFCFC' }}>
-              <Th>Name</Th><Th>Type</Th><Th>Multiplier</Th><Th>Applies to</Th><Th align="right">Actions</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {initial.map((row) => (
-              <tr key={row.id} style={{ borderBottom: `1px solid #F0F4F4` }}>
-                <Td><strong style={{ color: CHARCOAL }}>{row.name}</strong></Td>
-                <Td>
-                  <Pill variant={row.type === 'SEASONAL' ? 'amber' : 'blue'}>{row.type}</Pill>{' '}
-                  <span style={{ fontSize: 11, color: '#5C7170' }}>{fmtTypeMeta(row)}</span>
-                </Td>
-                <Td><Pill variant="teal">{row.multiplier}×</Pill></Td>
-                <Td>{fmtScope(row)}</Td>
-                <Td align="right">
-                  <button onClick={() => openEdit(row)} style={btn('#fff', 'sm', CHARCOAL)}>Edit</button>{' '}
-                  <button onClick={() => del(row.id)} style={btn('#fff', 'sm', CORAL)}>Delete</button>
-                </Td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-
       {editing ? (
         <div style={inlineForm()}>
           <div style={inlineFormTitle()}>✎ {editing && 'id' in editing && editing.id ? 'Edit' : 'Add'} multiplier</div>
@@ -464,6 +473,33 @@ function MultipliersCard({ initial, roomTypes }: { initial: MultiplierRow[]; roo
           </div>
         </div>
       ) : null}
+
+      {initial.length === 0 ? <Empty>No multipliers yet.</Empty> : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: '#FAFCFC' }}>
+              <Th>Name</Th><Th>Type</Th><Th>Multiplier</Th><Th>Applies to</Th><Th align="right">Actions</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {initial.map((row) => (
+              <tr key={row.id} style={{ borderBottom: `1px solid #F0F4F4` }}>
+                <Td><strong style={{ color: CHARCOAL }}>{row.name}</strong></Td>
+                <Td>
+                  <Pill variant={row.type === 'SEASONAL' ? 'amber' : 'blue'}>{row.type}</Pill>{' '}
+                  <span style={{ fontSize: 11, color: '#5C7170' }}>{fmtTypeMeta(row)}</span>
+                </Td>
+                <Td><Pill variant="teal">{row.multiplier}×</Pill></Td>
+                <Td>{fmtScope(row)}</Td>
+                <Td align="right">
+                  <button onClick={() => openEdit(row)} style={btn('#fff', 'sm', CHARCOAL)}>Edit</button>{' '}
+                  <button onClick={() => del(row.id)} style={btn('#fff', 'sm', CORAL)}>Delete</button>
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </Card>
   );
 }

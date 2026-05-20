@@ -283,7 +283,7 @@ function CancellationPoliciesCard({ initial }: { initial: Policy[] }) {
       <div style={{ ...cardHeader, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>Cancellation policies</span>
         {!form ? (
-          <button type="button" style={btn('ghost', busy)} disabled={busy} onClick={() => setForm({ ...emptyForm })}>
+          <button type="button" style={btn('primary', busy)} disabled={busy} onClick={() => setForm({ ...emptyForm })}>
             + Add policy
           </button>
         ) : null}
@@ -293,60 +293,8 @@ function CancellationPoliciesCard({ initial }: { initial: Policy[] }) {
           <div style={{ fontSize: 13, color: MUTED }}>No cancellation policies yet.</div>
         ) : null}
 
-        {policies.map((p) => (
-          <div
-            key={p.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              padding: '10px 0',
-              borderBottom: `1px solid ${BORDER}`,
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: CHARCOAL }}>
-                {p.name}
-                {p.isDefault ? (
-                  <span
-                    style={{
-                      marginLeft: 8,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      padding: '2px 6px',
-                      borderRadius: 4,
-                      background: 'rgba(29,168,136,0.12)',
-                      color: '#0F7A5E',
-                    }}
-                  >
-                    DEFAULT
-                  </span>
-                ) : null}
-              </div>
-              <div style={{ fontSize: 12, color: '#5C7170', marginTop: 2 }}>
-                Within {p.windowHours}h · {p.penaltyType}
-                {p.penaltyType === 'PERCENTAGE' && p.penaltyValue != null ? ` (${p.penaltyValue}%)` : ''}
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" style={btn('ghost', busy)} disabled={busy} onClick={() => startEdit(p)}>
-                Edit
-              </button>
-              <button
-                type="button"
-                style={btn('ghost', busy)}
-                disabled={busy}
-                onClick={() => void remove(p.id)}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
-
         {form ? (
-          <div style={{ marginTop: 14, padding: 14, background: '#F4F9F8', borderRadius: 10 }}>
+          <div style={{ marginBottom: 14, padding: 14, background: '#F4F9F8', borderRadius: 10 }}>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: CHARCOAL, marginBottom: 10 }}>
               {form.id ? 'Edit policy' : 'New policy'}
             </div>
@@ -427,6 +375,58 @@ function CancellationPoliciesCard({ initial }: { initial: Policy[] }) {
             </div>
           </div>
         ) : null}
+
+        {policies.map((p) => (
+          <div
+            key={p.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              padding: '10px 0',
+              borderBottom: `1px solid ${BORDER}`,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: CHARCOAL }}>
+                {p.name}
+                {p.isDefault ? (
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: 4,
+                      background: 'rgba(29,168,136,0.12)',
+                      color: '#0F7A5E',
+                    }}
+                  >
+                    DEFAULT
+                  </span>
+                ) : null}
+              </div>
+              <div style={{ fontSize: 12, color: '#5C7170', marginTop: 2 }}>
+                Within {p.windowHours}h · {p.penaltyType}
+                {p.penaltyType === 'PERCENTAGE' && p.penaltyValue != null ? ` (${p.penaltyValue}%)` : ''}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" style={btn('ghost', busy)} disabled={busy} onClick={() => startEdit(p)}>
+                Edit
+              </button>
+              <button
+                type="button"
+                style={btn('ghost', busy)}
+                disabled={busy}
+                onClick={() => void remove(p.id)}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
 
         {error ? <div style={{ marginTop: 12, color: ERR, fontSize: 12.5, fontWeight: 500 }}>{error}</div> : null}
       </div>

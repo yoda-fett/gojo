@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { PageShell } from '@/components/layout/page-shell';
@@ -252,6 +252,166 @@ export function RoomsClient({
 
   const typeName = (id: string) => roomTypes.find((rt) => rt.id === id)?.name ?? '—';
 
+  // The add / edit form. Rendered above the table when adding a room, and
+  // inline directly below the row being edited.
+  const formBlock = form ? (
+    <div
+      style={{
+        margin: '16px 20px',
+        border: `1px dashed ${TEAL}`,
+        borderRadius: 10,
+        background: SOFT,
+        padding: 18,
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#0F7A5E', marginBottom: 14 }}>
+        {form.id ? '✎ Edit room' : '✎ Add room'}
+      </div>
+
+      {!form.id && (
+        <div
+          style={{
+            display: 'inline-flex',
+            border: `1px solid ${BORDER}`,
+            borderRadius: 8,
+            overflow: 'hidden',
+            background: '#fff',
+            marginBottom: 14,
+          }}
+        >
+          {(['single', 'range'] as Mode[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              style={{
+                padding: '7px 16px',
+                border: 'none',
+                background: mode === m ? TEAL : '#fff',
+                color: mode === m ? '#fff' : '#5C7170',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              {m === 'single' ? 'Single room' : 'Add range'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px 20px' }}>
+        {mode === 'single' || form.id ? (
+          <Field label="Room number / name">
+            <input
+              value={form.number}
+              onChange={(e) => setForm({ ...form, number: e.target.value })}
+              placeholder="e.g. 106"
+              style={input}
+            />
+          </Field>
+        ) : (
+          <>
+            <Field label="Start number">
+              <input
+                value={form.rangeStart}
+                onChange={(e) => setForm({ ...form, rangeStart: e.target.value })}
+                placeholder="101"
+                style={input}
+              />
+            </Field>
+            <Field label="End number">
+              <input
+                value={form.rangeEnd}
+                onChange={(e) => setForm({ ...form, rangeEnd: e.target.value })}
+                placeholder="110"
+                style={input}
+              />
+            </Field>
+            <Field label="Prefix (optional)">
+              <input
+                value={form.rangePrefix}
+                onChange={(e) => setForm({ ...form, rangePrefix: e.target.value })}
+                placeholder="e.g. G-"
+                style={input}
+              />
+            </Field>
+          </>
+        )}
+
+        <Field label="Room type">
+          <select
+            value={form.roomTypeId}
+            onChange={(e) => setForm({ ...form, roomTypeId: e.target.value })}
+            style={input}
+          >
+            {roomTypes.map((rt) => (
+              <option key={rt.id} value={rt.id}>
+                {rt.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Floor">
+          <input
+            value={form.floor}
+            onChange={(e) => setForm({ ...form, floor: e.target.value })}
+            placeholder="0 (Ground), 1, 2..."
+            style={input}
+          />
+        </Field>
+      </div>
+
+      {(mode === 'single' || form.id) && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', gap: 18, marginBottom: 10 }}>
+            <label style={checkboxRow}>
+              <input
+                type="checkbox"
+                checked={form.accessible}
+                onChange={(e) => setForm({ ...form, accessible: e.target.checked })}
+              />
+              Accessible room
+            </label>
+            <label style={checkboxRow}>
+              Connecting →
+              <select
+                value={form.connectingRoomId}
+                onChange={(e) => setForm({ ...form, connectingRoomId: e.target.value })}
+                style={{ ...input, padding: '6px 10px' }}
+              >
+                <option value="">(none)</option>
+                {rooms.filter((r) => r.id !== form.id).map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.number}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <Field label="Notes (optional)">
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Internal note — e.g. balcony over the lake"
+              style={{ ...input, minHeight: 56, resize: 'vertical' }}
+            />
+          </Field>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
+        <button type="button" onClick={() => setForm(null)} disabled={busy} style={btnGhost}>
+          Cancel
+        </button>
+        <button type="button" onClick={() => void submit()} disabled={busy} style={btnPrimary}>
+          {form.id ? 'Save room' : mode === 'range' ? 'Add range' : 'Save room'}
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <PageShell
       container="narrow"
@@ -343,6 +503,9 @@ export function RoomsClient({
           </button>
         </div>
 
+        {/* Add form opens above the table. */}
+        {form && !form.id ? formBlock : null}
+
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#FAFCFC' }}>
@@ -364,213 +527,65 @@ export function RoomsClient({
             {grouped.map((group) => (
               <Group key={String(group.floor)} group={group} rooms={rooms}>
                 {group.rooms.map((r) => (
-                  <tr key={r.id}>
-                    <td style={td}>
-                      <div style={{ fontWeight: 600, color: CHARCOAL }}>{r.number}</div>
-                      {r.notes && <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{r.notes}</div>}
-                    </td>
-                    <td style={td}>{typeName(r.roomTypeId)}</td>
-                    <td style={td}>{floorLabel(r.floor)}</td>
-                    <td style={td}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {r.accessible && <Pill color="blue">Accessible</Pill>}
-                        {r.connectingRoomId && (
-                          <Pill color="amber">
-                            Connecting → {rooms.find((x) => x.id === r.connectingRoomId)?.number ?? '?'}
-                          </Pill>
-                        )}
-                        {!r.accessible && !r.connectingRoomId && <span style={{ color: '#C5D0CF', fontSize: 12 }}>—</span>}
-                      </div>
-                    </td>
-                    <td style={{ ...td, textAlign: 'right' }}>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                        <button type="button" onClick={() => openEdit(r)} disabled={busy} style={iconBtn()}>
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void remove(r)}
-                          disabled={busy}
-                          style={iconBtn(true)}
-                          title={
-                            blockedDelete === r.id
-                              ? 'Cannot delete — room has active reservations.'
-                              : undefined
-                          }
-                        >
-                          Delete
-                        </button>
-                      </div>
-                      {blockedDelete === r.id && (
-                        <div style={{ fontSize: 11, color: '#B5572A', marginTop: 4 }}>
-                          Blocked — active reservations.
+                  <Fragment key={r.id}>
+                    <tr>
+                      <td style={td}>
+                        <div style={{ fontWeight: 600, color: CHARCOAL }}>{r.number}</div>
+                        {r.notes && <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{r.notes}</div>}
+                      </td>
+                      <td style={td}>{typeName(r.roomTypeId)}</td>
+                      <td style={td}>{floorLabel(r.floor)}</td>
+                      <td style={td}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                          {r.accessible && <Pill color="blue">Accessible</Pill>}
+                          {r.connectingRoomId && (
+                            <Pill color="amber">
+                              Connecting → {rooms.find((x) => x.id === r.connectingRoomId)?.number ?? '?'}
+                            </Pill>
+                          )}
+                          {!r.accessible && !r.connectingRoomId && <span style={{ color: '#C5D0CF', fontSize: 12 }}>—</span>}
                         </div>
-                      )}
-                    </td>
-                  </tr>
+                      </td>
+                      <td style={{ ...td, textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          <button type="button" onClick={() => openEdit(r)} disabled={busy} style={iconBtn()}>
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void remove(r)}
+                            disabled={busy}
+                            style={iconBtn(true)}
+                            title={
+                              blockedDelete === r.id
+                                ? 'Cannot delete — room has active reservations.'
+                                : undefined
+                            }
+                          >
+                            Delete
+                          </button>
+                        </div>
+                        {blockedDelete === r.id && (
+                          <div style={{ fontSize: 11, color: '#B5572A', marginTop: 4 }}>
+                            Blocked — active reservations.
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                    {/* Edit form opens inline, directly below its row. */}
+                    {form && form.id === r.id ? (
+                      <tr>
+                        <td colSpan={5} style={{ padding: 0 }}>
+                          {formBlock}
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 ))}
               </Group>
             ))}
           </tbody>
         </table>
-
-        {form && (
-          <div
-            style={{
-              margin: '0 20px 20px',
-              border: `1px dashed ${TEAL}`,
-              borderRadius: 10,
-              background: SOFT,
-              padding: 18,
-            }}
-          >
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#0F7A5E', marginBottom: 14 }}>
-              {form.id ? '✎ Edit room' : '✎ Add room'}
-            </div>
-
-            {!form.id && (
-              <div
-                style={{
-                  display: 'inline-flex',
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 8,
-                  overflow: 'hidden',
-                  background: '#fff',
-                  marginBottom: 14,
-                }}
-              >
-                {(['single', 'range'] as Mode[]).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => setMode(m)}
-                    style={{
-                      padding: '7px 16px',
-                      border: 'none',
-                      background: mode === m ? TEAL : '#fff',
-                      color: mode === m ? '#fff' : '#5C7170',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {m === 'single' ? 'Single room' : 'Add range'}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px 20px' }}>
-              {mode === 'single' || form.id ? (
-                <Field label="Room number / name">
-                  <input
-                    value={form.number}
-                    onChange={(e) => setForm({ ...form, number: e.target.value })}
-                    placeholder="e.g. 106"
-                    style={input}
-                  />
-                </Field>
-              ) : (
-                <>
-                  <Field label="Start number">
-                    <input
-                      value={form.rangeStart}
-                      onChange={(e) => setForm({ ...form, rangeStart: e.target.value })}
-                      placeholder="101"
-                      style={input}
-                    />
-                  </Field>
-                  <Field label="End number">
-                    <input
-                      value={form.rangeEnd}
-                      onChange={(e) => setForm({ ...form, rangeEnd: e.target.value })}
-                      placeholder="110"
-                      style={input}
-                    />
-                  </Field>
-                  <Field label="Prefix (optional)">
-                    <input
-                      value={form.rangePrefix}
-                      onChange={(e) => setForm({ ...form, rangePrefix: e.target.value })}
-                      placeholder="e.g. G-"
-                      style={input}
-                    />
-                  </Field>
-                </>
-              )}
-
-              <Field label="Room type">
-                <select
-                  value={form.roomTypeId}
-                  onChange={(e) => setForm({ ...form, roomTypeId: e.target.value })}
-                  style={input}
-                >
-                  {roomTypes.map((rt) => (
-                    <option key={rt.id} value={rt.id}>
-                      {rt.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Floor">
-                <input
-                  value={form.floor}
-                  onChange={(e) => setForm({ ...form, floor: e.target.value })}
-                  placeholder="0 (Ground), 1, 2..."
-                  style={input}
-                />
-              </Field>
-            </div>
-
-            {(mode === 'single' || form.id) && (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ display: 'flex', gap: 18, marginBottom: 10 }}>
-                  <label style={checkboxRow}>
-                    <input
-                      type="checkbox"
-                      checked={form.accessible}
-                      onChange={(e) => setForm({ ...form, accessible: e.target.checked })}
-                    />
-                    Accessible room
-                  </label>
-                  <label style={checkboxRow}>
-                    Connecting →
-                    <select
-                      value={form.connectingRoomId}
-                      onChange={(e) => setForm({ ...form, connectingRoomId: e.target.value })}
-                      style={{ ...input, padding: '6px 10px' }}
-                    >
-                      <option value="">(none)</option>
-                      {rooms.filter((r) => r.id !== form.id).map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.number}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <Field label="Notes (optional)">
-                  <textarea
-                    value={form.notes}
-                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                    placeholder="Internal note — e.g. balcony over the lake"
-                    style={{ ...input, minHeight: 56, resize: 'vertical' }}
-                  />
-                </Field>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'flex-end' }}>
-              <button type="button" onClick={() => setForm(null)} disabled={busy} style={btnGhost}>
-                Cancel
-              </button>
-              <button type="button" onClick={() => void submit()} disabled={busy} style={btnPrimary}>
-                {form.id ? 'Save room' : mode === 'range' ? 'Add range' : 'Save room'}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
       </div>
     </PageShell>

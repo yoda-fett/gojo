@@ -284,7 +284,7 @@ export function WizardShell({
       </div>
 
       {/* Content area */}
-      <main style={{ flex: 1, padding: '32px 28px', maxWidth: 760, width: '100%', margin: '0 auto' }}>
+      <main style={{ flex: 1, padding: '32px 28px', maxWidth: 1160, width: '100%', margin: '0 auto' }}>
         {onReview ? (
           <>
             <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>Review your setup</h1>

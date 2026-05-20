@@ -18,6 +18,17 @@ export async function updateRoomTypeRates(actor, roomTypeId, input) {
       throw new AppError('CONFLICT', 'Room type was updated by someone else. Refresh and try again.', 409);
     }
 
+    // Floor rate is bounded above by the rack (base) rate — it can never sell
+    // higher than the rack rate.
+    const baseRate = Number(current.baseRate);
+    if (input.floorRate > baseRate) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `Floor rate cannot be higher than the rack rate (₹${Math.round(baseRate).toLocaleString('en-IN')}).`,
+        400,
+      );
+    }
+
     const updated = await tx.roomType.update({
       where: { id: roomTypeId },
       data: {
