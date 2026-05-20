@@ -17,7 +17,7 @@ import {
 } from '@gojo/db';
 import { AppError } from '@gojo/types';
 
-import { getRedisClient } from '@/lib/redis';
+import { getLockRedis } from '@/lib/redis';
 import { generateBookingReference } from '@/lib/utils/booking-ref';
 import { publishSseEvent } from '@/lib/services/sse-publisher';
 import { isRoomBlockedForRange } from '@/lib/services/room-blocks';
@@ -136,8 +136,8 @@ export async function processReservationIngest({
       );
     }
 
-    const redis = getRedisClient();
-    const result = await withRoomLock(payload.roomId, redis as never, prisma, async (tx) => {
+    const redis = getLockRedis();
+    const result = await withRoomLock(payload.roomId, redis, prisma, async (tx) => {
       const room = await tx.room.findUnique({ where: { id: payload.roomId } });
       if (!room) throw new AppError('NOT_FOUND', 'Room not found', 404);
       if (room.state !== 'AVAILABLE') {
@@ -252,8 +252,8 @@ export async function processCancellationIngest({
       return { alerted: true, reservationId: reservation.id };
     }
 
-    const redis = getRedisClient();
-    const result = await withRoomLock(reservation.roomId, redis as never, prisma, async (tx) => {
+    const redis = getLockRedis();
+    const result = await withRoomLock(reservation.roomId, redis, prisma, async (tx) => {
       await tx.reservation.update({
         where: { id: reservation.id },
         data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: 'OTA_CANCELLATION' },

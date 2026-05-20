@@ -22,6 +22,7 @@
   --color-line-soft: #e8efee;
   --color-amber: #e9c46a;
   --color-coral: #e8763f;
+  --topbar-height: 64px;
 }
 
 .gojo-nav-item:not([data-active]):hover {

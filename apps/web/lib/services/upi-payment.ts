@@ -5,7 +5,7 @@ import { prisma, withRoomLock, writeAuditLog, withIdempotency } from '@gojo/db';
 import { AppError } from '@gojo/types';
 import { customAlphabet } from 'nanoid';
 
-import { getRedisClient } from '@/lib/redis';
+import { getLockRedis } from '@/lib/redis';
 import { generateBookingReference } from '@/lib/utils/booking-ref';
 import { nightsBetween } from '@/lib/services/direct-booking';
 
@@ -164,8 +164,8 @@ export async function processPaymentWebhook({
       return { status: 'FAILED' as const };
     }
 
-    const redis = getRedisClient();
-    const result = await withRoomLock(pending.roomId, redis as never, prisma, async (tx) => {
+    const redis = getLockRedis();
+    const result = await withRoomLock(pending.roomId, redis, prisma, async (tx) => {
       const room = await tx.room.findUnique({ where: { id: pending.roomId } });
       if (!room) throw new AppError('NOT_FOUND', 'Room not found', 404);
       if (room.state !== 'HELD') {

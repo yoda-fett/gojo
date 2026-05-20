@@ -25,7 +25,7 @@ export default async function ReservationsPage({
   const from = typeof params.from === 'string' ? params.from : undefined;
   const to = typeof params.to === 'string' ? params.to : undefined;
 
-  const [initialData, roomTypes] = await Promise.all([
+  const [initialData, roomTypeRows, cancellationPolicies] = await Promise.all([
     listReservations(actor, {
       status,
       source,
@@ -36,9 +36,20 @@ export default async function ReservationsPage({
     prisma.roomType.findMany({
       where: { propertyId: actor.propertyId, deletedAt: null },
       orderBy: { name: 'asc' },
+      select: { id: true, name: true, floorRate: true },
+    }),
+    prisma.cancellationPolicy.findMany({
+      where: { propertyId: actor.propertyId, deletedAt: null },
+      orderBy: { name: 'asc' },
       select: { id: true, name: true },
     }),
   ]);
+
+  const roomTypes = roomTypeRows.map((roomType) => ({
+    id: roomType.id,
+    name: roomType.name,
+    floorRate: Number(roomType.floorRate),
+  }));
 
   return (
     <div>
@@ -47,7 +58,7 @@ export default async function ReservationsPage({
         subtitle="Unified front-desk register across direct, walk-in, and OTA reservations"
         controls={(
           <Link
-            href="/reservations/new"
+            href="/reservations?new=1"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -79,6 +90,7 @@ export default async function ReservationsPage({
           to,
         }}
         roomTypes={roomTypes}
+        cancellationPolicies={cancellationPolicies}
         initialData={initialData}
       />
     </div>

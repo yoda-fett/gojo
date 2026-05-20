@@ -64,7 +64,7 @@ export function DateNav({ from, to }: { from: string; to: string }) {
         Next →
       </button>
       <Link
-        href="/reservations/new"
+        href="/reservations?new=1"
         style={{
           display: 'inline-flex',
           alignItems: 'center',

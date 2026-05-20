@@ -3,7 +3,7 @@ import { prisma, checkSubscriptionGate, withRoomLock } from '@gojo/db';
 import { AppError } from '@gojo/types';
 import { addDays, differenceInCalendarDays } from 'date-fns';
 
-import { getRedisClient } from '@/lib/redis';
+import { getLockRedis } from '@/lib/redis';
 import { decryptGuestId, encryptGuestId, maskGuestId } from '@/lib/services/guest-id-crypto';
 import { fallbackBookingReference, generateBookingReference } from '@/lib/utils/booking-ref';
 import { formatISTDateKey, startOfIstDayUtc, todayIST } from '@/lib/tz';
@@ -359,7 +359,11 @@ export async function getAvailableRooms(actor, input) {
       propertyId: actor.propertyId,
       roomTypeId: input.roomTypeId,
       deletedAt: null,
-      state: { in: ['AVAILABLE', 'CLEAN', 'DIRTY', 'RESERVED'] },
+      // Availability for a date range is decided by overlapping reservations
+      // below — NOT by the room's current state. An OCCUPIED room (guest in it
+      // today) is still bookable for a future range. Only genuinely
+      // un-bookable states are excluded here.
+      state: { notIn: ['OUT_OF_ORDER', 'MAINTENANCE'] },
     },
     orderBy: [{ floor: 'asc' }, { number: 'asc' }],
   });
@@ -390,11 +394,16 @@ export async function getAvailableRooms(actor, input) {
 
 export async function createWalkInReservation(actor, input) {
   await checkSubscriptionGate(actor, 'reservation.create', prisma);
-  const redis = getRedisClient();
+  const redis = getLockRedis();
 
-  const isSameDayWalkIn = formatISTDateKey(input.checkIn) === todayIST();
+  const checkInKey = formatISTDateKey(input.checkIn);
+  const today = todayIST();
+  if (checkInKey < today) {
+    throw new AppError('VALIDATION_ERROR', 'Check-in date cannot be in the past', 400);
+  }
+  const isSameDayWalkIn = checkInKey === today;
 
-  return withRoomLock(input.roomId, redis as never, prisma, async (tx) => {
+  return withRoomLock(input.roomId, redis, prisma, async (tx) => {
     const roomType = await tx.roomType.findFirst({
       where: { id: input.roomTypeId, propertyId: actor.propertyId, deletedAt: null },
     });
@@ -468,6 +477,22 @@ export async function getReservationDetail(actor, reservationId) {
   const totalPayments = Math.abs(lines.filter((line) => numberize(line.amount) < 0).reduce((sum, line) => sum + numberize(line.amount), 0));
   const balanceDue = totalCharges - totalPayments;
 
+  const cancellationPolicy = reservation.selectedCancellationPolicyId
+    ? bundle.cancellationPolicies.find((policy) => policy.id === reservation.selectedCancellationPolicyId) ?? null
+    : null;
+
+  const previousStayCount = await prisma.reservation.count({
+    where: {
+      propertyId: actor.propertyId,
+      guestId: reservation.guestId,
+      deletedAt: null,
+      id: { not: reservation.id },
+    },
+  });
+
+  const nightlyRateValue = numberize(reservation.rateSnapshot?.nightlyRate ?? reservation.rateSnapshot?.ratePerNight ?? 0);
+  const belowFloor = roomType ? nightlyRateValue < numberize(roomType.floorRate) : false;
+
   return {
     id: reservation.id,
     bookingReference: reservation.bookingReference ?? fallbackBookingReference(reservation.id, reservation.createdAt),
@@ -478,7 +503,8 @@ export async function getReservationDetail(actor, reservationId) {
     checkIn: reservation.checkIn.toISOString(),
     checkOut: reservation.checkOut.toISOString(),
     stateVersion: reservation.stateVersion,
-    nightlyRate: numberize(reservation.rateSnapshot?.nightlyRate ?? reservation.rateSnapshot?.ratePerNight ?? 0),
+    nightlyRate: nightlyRateValue,
+    belowFloor,
     guest: {
       id: guest?.id,
       fullName: guest?.fullName ?? 'Guest',
@@ -490,11 +516,16 @@ export async function getReservationDetail(actor, reservationId) {
     room: {
       id: room?.id,
       number: room?.number ?? 'TBD',
+      floor: room?.floor ?? null,
       state: room?.state ?? 'AVAILABLE',
       stateVersion: room?.stateVersion ?? 0,
       roomType: roomType?.name ?? 'Room',
       roomTypeId: roomType?.id ?? reservation.roomTypeId,
     },
+    previousStayCount,
+    cancellationPolicy: cancellationPolicy
+      ? { name: cancellationPolicy.name, description: cancellationPolicy.description ?? null }
+      : null,
     folio: folio
       ? {
           id: folio.id,
@@ -563,8 +594,8 @@ export async function checkInReservation(actor, reservationId, input) {
     throw new AppError('INVALID_TRANSITION', `Cannot check in reservation from ${reservation.status}`, 422);
   }
 
-  const redis = getRedisClient();
-  return withRoomLock(reservation.roomId, redis as never, prisma, async (tx) => {
+  const redis = getLockRedis();
+  return withRoomLock(reservation.roomId, redis, prisma, async (tx) => {
     const current = await tx.reservation.findFirst({
       where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
     });
@@ -754,8 +785,8 @@ export async function checkOutReservation(actor, reservationId, input) {
     throw new AppError('INVALID_TRANSITION', `Cannot check out reservation from ${reservation.status}`, 422);
   }
 
-  const redis = getRedisClient();
-  return withRoomLock(reservation.roomId, redis as never, prisma, async (tx) => {
+  const redis = getLockRedis();
+  return withRoomLock(reservation.roomId, redis, prisma, async (tx) => {
     const current = await tx.reservation.findFirst({
       where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
     });
@@ -807,7 +838,7 @@ export async function checkOutReservation(actor, reservationId, input) {
 
 async function enqueueRoomChangeSms(payload) {
   try {
-    const redis = getRedisClient();
+    const redis = getLockRedis();
     if ('set' in redis) {
       await redis.set(`notification:room-change:${payload.reservationId}:${Date.now()}`, JSON.stringify(payload), 'EX', 3600);
     }
@@ -827,8 +858,8 @@ export async function amendReservation(actor, reservationId, input) {
   }
 
   const targetRoomId = input.roomId ?? reservation.roomId;
-  const redis = getRedisClient();
-  return withRoomLock(targetRoomId, redis as never, prisma, async (tx) => {
+  const redis = getLockRedis();
+  return withRoomLock(targetRoomId, redis, prisma, async (tx) => {
     const current = await tx.reservation.findFirst({
       where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
     });
@@ -925,8 +956,8 @@ export async function cancelReservation(actor, reservationId, input) {
     throw new AppError('INVALID_TRANSITION', `Cannot cancel reservation from ${reservation.status}`, 422);
   }
 
-  const redis = getRedisClient();
-  return withRoomLock(reservation.roomId, redis as never, prisma, async (tx) => {
+  const redis = getLockRedis();
+  return withRoomLock(reservation.roomId, redis, prisma, async (tx) => {
     const current = await tx.reservation.findFirst({
       where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
     });
@@ -996,8 +1027,8 @@ export async function markReservationNoShow(actor, reservationId, input) {
     throw new AppError('VALIDATION_ERROR', 'No-show cutoff has not been reached yet', 400);
   }
 
-  const redis = getRedisClient();
-  return withRoomLock(reservation.roomId, redis as never, prisma, async (tx) => {
+  const redis = getLockRedis();
+  return withRoomLock(reservation.roomId, redis, prisma, async (tx) => {
     const current = await tx.reservation.findFirst({
       where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
     });

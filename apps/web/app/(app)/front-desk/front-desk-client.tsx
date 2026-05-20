@@ -131,8 +131,8 @@ export function FrontDeskClient() {
           title="Front Desk"
           subtitle={dateStr}
           primary={
-            <Button href="/reservations/new" variant="primary">
-              + Walk-in
+            <Button href="/reservations?new=1" variant="primary">
+              + Booking
             </Button>
           }
         />
@@ -274,7 +274,7 @@ const ROOM_TILE_STYLES: Record<string, RoomTileStyle> = {
     roomType: 'text-[var(--color-mid-gray)]',
     pill: 'bg-[#EEF2F1] text-[var(--color-mid-gray)]',
     pillIcon: '○',
-    pillLabel: 'Vacant Clean',
+    pillLabel: 'Vacant · Clean',
     primary: 'text-[var(--color-mid-gray)]',
     primaryMuted: true,
     cornerTone: 'text-[var(--color-mid-gray)]',

@@ -4,7 +4,7 @@ import { AppError } from '@gojo/types';
 import { addMinutes, differenceInCalendarDays } from 'date-fns';
 import { customAlphabet } from 'nanoid';
 
-import { getRedisClient } from '@/lib/redis';
+import { getLockRedis } from '@/lib/redis';
 import { isRoomBlockedForRange } from '@/lib/services/room-blocks';
 
 const slugAlphabet = customAlphabet('abcdefghjkmnpqrstuvwxyz23456789', 6);
@@ -162,8 +162,8 @@ export async function acquireHold({
   const holdExpiresAt = addMinutes(now, HOLD_DURATION_MINUTES);
   const holdRef = `HOLD-${slugAlphabet()}`;
 
-  const redis = getRedisClient();
-  return withRoomLock(candidate.id, redis as never, prisma, async (tx) => {
+  const redis = getLockRedis();
+  return withRoomLock(candidate.id, redis, prisma, async (tx) => {
     const fresh = await tx.room.findUnique({ where: { id: candidate.id } });
     if (!fresh || fresh.state !== 'AVAILABLE' || (fresh.holdExpiresAt && fresh.holdExpiresAt > now)) {
       throw new AppError('NO_ROOMS_AVAILABLE', 'Room no longer available', 409);

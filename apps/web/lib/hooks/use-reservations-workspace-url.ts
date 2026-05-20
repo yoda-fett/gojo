@@ -5,7 +5,8 @@ import { useCallback, useMemo } from 'react';
 
 export type ReservationsDrawer =
   | { kind: 'folio'; reservationId: string }
-  | { kind: 'history'; reservationId: string };
+  | { kind: 'history'; reservationId: string }
+  | { kind: 'amend'; reservationId: string };
 
 export type ReservationsWorkspaceState = {
   expandedId: string | null;
@@ -17,7 +18,7 @@ function parseDrawer(raw: string | null): ReservationsDrawer | null {
   if (!raw) return null;
   const [kind, reservationId] = raw.split(':');
   if (!reservationId) return null;
-  if (kind === 'folio' || kind === 'history') {
+  if (kind === 'folio' || kind === 'history' || kind === 'amend') {
     return { kind, reservationId };
   }
   return null;
@@ -93,10 +94,25 @@ export function useReservationsWorkspaceUrl() {
     [setParams],
   );
 
+  // Close the new-reservation drawer and expand the freshly-created row in a
+  // single navigation. Two separate setters would each read a stale
+  // `searchParams` snapshot and the second would clobber the first.
+  const completeNewReservation = useCallback(
+    (reservationId: string) => {
+      setParams((params) => {
+        params.delete('new');
+        params.delete('drawer');
+        params.set('expanded', reservationId);
+      });
+    },
+    [setParams],
+  );
+
   return {
     ...state,
     setExpandedId,
     setNewOpen,
     setDrawer,
+    completeNewReservation,
   };
 }

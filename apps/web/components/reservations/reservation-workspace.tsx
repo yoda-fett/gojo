@@ -9,9 +9,14 @@ import { ArrowDown, ArrowUp, ArrowUpDown, BookOpenText, Search } from 'lucide-re
 import { FilterBar } from '@/components/reservations/filter-bar';
 import { FilterNoResults } from '@/components/reservations/filter-no-results';
 import { ReservationListRow } from '@/components/reservations/reservation-list-row';
+import { ReservationHistoryDrawer } from '@/components/reservations/reservation-history-drawer';
+import { ReservationFolioDrawer } from '@/components/reservations/reservation-folio-drawer';
+import { NewReservationDrawer } from '@/components/reservations/new-reservation-drawer';
+import { AmendReservationDrawer } from '@/components/reservations/amend-reservation-drawer';
 import { BaseCard } from '@/components/ui/base-card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useReservationsWorkspaceUrl } from '@/lib/hooks/use-reservations-workspace-url';
 
 type ReservationListPayload = {
   reservations: Array<{
@@ -44,15 +49,18 @@ export function ReservationWorkspace({
   role,
   initialFilters,
   roomTypes,
+  cancellationPolicies,
   initialData,
 }: {
   role: 'OWNER' | 'MANAGER' | 'FRONT_DESK';
   initialFilters: Record<string, string | undefined>;
-  roomTypes: Array<{ id: string; name: string }>;
+  roomTypes: Array<{ id: string; name: string; floorRate: number }>;
+  cancellationPolicies: Array<{ id: string; name: string }>;
   initialData: ReservationListPayload;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { expandedId, isNewOpen, drawer, setExpandedId, setNewOpen, setDrawer, completeNewReservation } = useReservationsWorkspaceUrl();
   const [query, setQuery] = useState(initialFilters.q ?? '');
   const deferredQuery = useDeferredValue(query);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -69,10 +77,23 @@ export function ReservationWorkspace({
     setCursor(null);
   }, [initialData]);
 
+  // Esc collapses an expanded row, but only when no drawer is layered on top.
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape' && expandedId && !drawer && !isNewOpen) {
+        setExpandedId(null);
+      }
+    }
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [expandedId, drawer, isNewOpen, setExpandedId]);
+
   const params = useMemo(() => {
-    const next = new URLSearchParams(searchParams.toString());
-    if (!deferredQuery) next.delete('q');
-    else next.set('q', deferredQuery);
+    const next = new URLSearchParams();
+    for (const key of ['status', 'source', 'roomType', 'from', 'to']) {
+      for (const value of searchParams.getAll(key)) next.append(key, value);
+    }
+    if (deferredQuery) next.set('q', deferredQuery);
     return next;
   }, [deferredQuery, searchParams]);
 
@@ -116,8 +137,13 @@ export function ReservationWorkspace({
     router.replace('/reservations', { scroll: false });
   }
 
+  function handleCreated(reservationId: string) {
+    completeNewReservation(reservationId);
+    router.refresh();
+  }
+
   const [sortKey, setSortKey] = useState<SortKey>('checkIn');
-  const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -208,9 +234,9 @@ export function ReservationWorkspace({
             <EmptyState
               icon={<BookOpenText className="size-6" />}
               heading="No reservations yet"
-              body="Create a walk-in to get your front-desk register moving."
-              ctaLabel="Create walk-in"
-              ctaHref="/reservations/new"
+              body="Create a reservation to get your front-desk register moving."
+              ctaLabel="New Reservation"
+              ctaHref="/reservations?new=1"
             />
           )
         ) : (
@@ -219,7 +245,9 @@ export function ReservationWorkspace({
               <table className="min-w-full text-left">
                 <thead className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-mid-gray)]">
                   <tr>
+                    <th className="pr-3 px-3">
                     <SortHeader label="Booking Ref" sortBy="bookingReference" />
+                    </th>
                     <th className="pb-3 pr-3">Guest</th>
                     <th className="pb-3 pr-3">Room Type</th>
                     <SortHeader label="Check-in" sortBy="checkIn" />
@@ -227,12 +255,21 @@ export function ReservationWorkspace({
                     <th className="pb-3 pr-3 text-center">Nights</th>
                     <th className="pb-3 pr-3">Source</th>
                     <th className="pb-3 pr-3">Status</th>
-                    <th className="pb-3" aria-label="Open" />
+                    <th className="pb-3" aria-label="Expand" />
                   </tr>
                 </thead>
                 <tbody>
                   {sortedReservations.map((reservation) => (
-                    <ReservationListRow key={reservation.id} reservation={reservation} />
+                    <ReservationListRow
+                      key={reservation.id}
+                      reservation={reservation}
+                      role={role}
+                      expanded={expandedId === reservation.id}
+                      onToggle={() => setExpandedId(expandedId === reservation.id ? null : reservation.id)}
+                      onOpenHistory={() => setDrawer({ kind: 'history', reservationId: reservation.id })}
+                      onOpenFolio={() => setDrawer({ kind: 'folio', reservationId: reservation.id })}
+                      onOpenAmend={() => setDrawer({ kind: 'amend', reservationId: reservation.id })}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -245,6 +282,34 @@ export function ReservationWorkspace({
           </>
         )}
       </BaseCard>
+
+      <NewReservationDrawer
+        open={isNewOpen}
+        onClose={() => setNewOpen(false)}
+        onCreated={handleCreated}
+        roomTypes={roomTypes}
+        cancellationPolicies={cancellationPolicies}
+      />
+      <ReservationHistoryDrawer
+        open={drawer?.kind === 'history'}
+        reservationId={drawer?.kind === 'history' ? drawer.reservationId : ''}
+        onClose={() => setDrawer(null)}
+      />
+      <ReservationFolioDrawer
+        open={drawer?.kind === 'folio'}
+        reservationId={drawer?.kind === 'folio' ? drawer.reservationId : ''}
+        onClose={() => setDrawer(null)}
+      />
+      <AmendReservationDrawer
+        open={drawer?.kind === 'amend'}
+        reservationId={drawer?.kind === 'amend' ? drawer.reservationId : ''}
+        roomTypes={roomTypes}
+        onClose={() => setDrawer(null)}
+        onAmended={() => {
+          setDrawer(null);
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

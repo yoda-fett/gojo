@@ -25,20 +25,31 @@ async function acquireRoomLock(redlock: Redlock, resource: string) {
 
 export async function withRoomLock<T>(
   roomId: string,
-  redis: Redis,
+  redis: Redis | null,
   db: PrismaClient,
   fn: (tx: Parameters<Parameters<PrismaClient['$transaction']>[0]>[0]) => Promise<T>,
 ) {
+  const runTransaction = () =>
+    db.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe('SELECT id FROM rooms WHERE id = $1 FOR UPDATE', roomId);
+      return fn(tx);
+    });
+
+  // No Redis configured: the Postgres `FOR UPDATE` row lock inside the
+  // transaction still serialises concurrent mutations on this room within
+  // the database. Redlock is an extra cross-process guard, not the sole
+  // correctness mechanism — degrade to the DB lock rather than failing.
+  if (!redis) {
+    return runTransaction();
+  }
+
   const redlock = new Redlock([redis], { retryCount: 0 });
   const resource = `lock:room:${roomId}`;
 
   const lock = await acquireRoomLock(redlock, resource);
 
   try {
-    return await db.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe('SELECT id FROM rooms WHERE id = $1 FOR UPDATE', roomId);
-      return fn(tx);
-    });
+    return await runTransaction();
   } finally {
     await lock.release();
   }

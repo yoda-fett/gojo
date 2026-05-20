@@ -79,14 +79,32 @@ class ResilientRedis {
 
 const globalForRedis = globalThis as typeof globalThis & {
   gojoRedis?: ResilientRedis;
+  gojoRawRedis?: Redis | null;
 };
+
+function getRawRedis(): Redis | null {
+  if (globalForRedis.gojoRawRedis !== undefined) {
+    return globalForRedis.gojoRawRedis;
+  }
+
+  globalForRedis.gojoRawRedis = env.REDIS_URL
+    ? new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 })
+    : null;
+  return globalForRedis.gojoRawRedis;
+}
 
 export function getRedisClient() {
   if (globalForRedis.gojoRedis) {
     return globalForRedis.gojoRedis;
   }
 
-  const client = env.REDIS_URL ? new Redis(env.REDIS_URL, { lazyConnect: true, maxRetriesPerRequest: 1 }) : null;
-  globalForRedis.gojoRedis = new ResilientRedis(client);
+  globalForRedis.gojoRedis = new ResilientRedis(getRawRedis());
   return globalForRedis.gojoRedis;
+}
+
+// Redlock (used by withRoomLock) needs a full ioredis client — it runs Lua
+// scripts. The ResilientRedis wrapper above only exposes get/set, so lock
+// callers must use this raw accessor, not getRedisClient().
+export function getLockRedis(): Redis | null {
+  return getRawRedis();
 }

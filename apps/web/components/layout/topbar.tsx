@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 
 export function Topbar({ title, subtitle, controls, role }: { title: string; subtitle?: string; controls?: ReactNode; role?: Role }) {
   return (
-    <header className="sticky top-0 z-20 flex h-[64px] items-center justify-between border-b border-[#e8efee] bg-white px-4 shadow-[0_1px_2px_rgba(26,43,46,0.04)] sm:px-8">
+    <header className="sticky top-0 z-20 flex h-[var(--topbar-height)] items-center justify-between border-b border-[#e8efee] bg-white px-4 shadow-[0_1px_2px_rgba(26,43,46,0.04)] sm:px-8">
       <div className="flex items-center gap-3">
         <MobileDrawer {...(role ? { role } : {})} />
         <div>

@@ -30,7 +30,15 @@ export function Drawer({
 }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<Element | null>(null);
+  const onCloseRef = useRef(onClose);
   const titleId = ariaLabelledBy ?? 'drawer-title';
+
+  // Keep the latest onClose without re-running the open effect — otherwise an
+  // inline onClose (new identity each render) would re-fire focus-on-open on
+  // every keystroke, stealing focus back to the first focusable element.
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -40,7 +48,7 @@ export function Drawer({
     function handleKey(event: KeyboardEvent) {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab' || !panelRef.current) return;
@@ -77,7 +85,7 @@ export function Drawer({
       const trigger = triggerRef.current as HTMLElement | null;
       trigger?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
