@@ -46,6 +46,18 @@ export default async function PropertyProfilePage() {
     return null;
   }
 
+  // Serialize for the client form — Prisma Decimal cannot cross the
+  // Server → Client Component boundary.
+  const policiesForForm = policies.map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    windowHours: p.windowHours,
+    penaltyType: p.penaltyType,
+    penaltyValue: p.penaltyValue == null ? null : Number(p.penaltyValue),
+    isDefault: p.isDefault,
+  }));
+
   const archetype =
     property.costConfig && typeof property.costConfig === 'object'
       ? ((property.costConfig as { archetype?: string }).archetype ?? null)
@@ -56,7 +68,7 @@ export default async function PropertyProfilePage() {
       propertyId={property.id}
       property={property}
       archetype={archetype}
-      initialPolicies={policies}
+      initialPolicies={policiesForForm}
     />
   );
 }

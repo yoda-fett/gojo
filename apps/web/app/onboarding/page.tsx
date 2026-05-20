@@ -66,6 +66,18 @@ export default async function OnboardingPage() {
     }),
   ]);
 
+  // Serialize for the client form — Prisma Decimal cannot cross the
+  // Server → Client Component boundary.
+  const policiesForForm = policies.map((p) => ({
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    windowHours: p.windowHours,
+    penaltyType: p.penaltyType,
+    penaltyValue: p.penaltyValue == null ? null : Number(p.penaltyValue),
+    isDefault: p.isDefault,
+  }));
+
   // ── Step 2 — Room types ────────────────────────────────────────────────
   const roomTypes = await prisma.roomType.findMany({
     where: { propertyId: actor.propertyId, deletedAt: null },
@@ -257,7 +269,7 @@ export default async function OnboardingPage() {
         propertyId={property.id}
         property={property}
         archetype={archetype}
-        initialPolicies={policies}
+        initialPolicies={policiesForForm}
       />
     ),
     2: <RoomTypesForm initial={roomTypesForForm} />,
