@@ -33,6 +33,11 @@ interface RoomGridResponse {
       nightNumber: number | null;
       totalNights: number | null;
       visualState: string;
+      lastGuestName: string | null;
+      lastCheckOut: string | null;
+      nextArrivalGuestName: string | null;
+      nextArrivalCheckIn: string | null;
+      nextArrivalBookingReference: string | null;
     }>;
   }>;
 }
@@ -317,6 +322,26 @@ function formatDayMonth(iso: string | null): string {
   return ist.toLocaleString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' });
 }
 
+// Returns an ETA-style time label ("ETA 2:00 pm") if the reservation carries
+// a meaningful clock time; null if the time looks like an unset default
+// (midnight UTC, which most seed data uses).
+function formatEta(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+  const hours = ist.getUTCHours();
+  const minutes = ist.getUTCMinutes();
+  if (hours === 0 && minutes === 0) return null;
+  const time = ist.toLocaleString('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'UTC',
+  });
+  return `ETA ${time.toLowerCase()}`;
+}
+
 type GroupBy = 'none' | 'floor' | 'roomType';
 
 function sortByRoomNumber<T extends { roomNumber: string }>(rooms: T[]): T[] {
@@ -375,7 +400,7 @@ function RoomGridView({ groups, groupBy }: { groups: RoomGridResponse['groups'];
         {sorted.length === 0 ? (
           <p className="text-sm text-[var(--color-mid-gray)]">No rooms configured.</p>
         ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-3">
             {sorted.map((r) => (
               <RoomTile key={r.roomId} room={r} roomTypeName={r.roomTypeName} />
             ))}
@@ -443,13 +468,43 @@ function RoomTile({
 
   const bottomSecondary = (() => {
     if (room.bookingReference && room.checkOut && room.visualState === 'in_house') {
-      return `${room.bookingReference} · Check-out ${formatDayMonth(room.checkOut)}`;
+      return `Check-out ${formatDayMonth(room.checkOut)} · ${room.bookingReference}`;
     }
     if (room.bookingReference && room.visualState === 'departing') {
-      return `${room.bookingReference} · Check-out today`;
+      return `Check-out today · ${room.bookingReference}`;
     }
     if (room.bookingReference && room.visualState === 'arriving') {
-      return `${room.bookingReference} · ${room.checkIn ? 'Check-in today' : 'ETA not set'}`;
+      const eta = formatEta(room.checkIn);
+      return `${eta ?? 'Check-in Today'} · ${room.bookingReference}`;
+    }
+    // Dirty room with an active/incoming reservation — next guest arriving.
+    // ETA from the reservation's check-in time when present, else generic
+    // "Check-in Today" copy.
+    if (room.bookingReference && room.visualState === 'dirty') {
+      const eta = formatEta(room.checkIn);
+      return `${eta ?? 'ETA not set'} · ${room.bookingReference}`;
+    }
+    // Dirty room with no incoming reservation — surface the last departed
+    // guest so front-desk staff have context on who just left.
+    if (room.visualState === 'dirty' && room.lastGuestName) {
+      return `Last: ${room.lastCheckOut ? `${formatDayMonth(room.lastCheckOut)}` : ''} · ${room.lastGuestName}`;
+    }
+    // Clean room with a future arrival — show the next guest landing so
+    // front-desk staff can pre-empt prep work.
+    if (
+      room.visualState === 'vacant_clean' &&
+      room.nextArrivalCheckIn &&
+      room.nextArrivalGuestName
+    ) {
+      return `Next Arrival: ${formatDayMonth(room.nextArrivalCheckIn)} · ${room.nextArrivalGuestName}`;
+    }
+    // Held / on-hold (transient booking lock).
+    if (room.visualState === 'held') {
+      return room.bookingReference ? `Awaiting confirmation · ${room.bookingReference}` : 'Awaiting confirmation';
+    }
+    // Out-of-order or under maintenance — show why if we ever have a reason.
+    if (room.visualState === 'out_of_order' || room.visualState === 'maintenance') {
+      return 'Not bookable';
     }
     return null;
   })();

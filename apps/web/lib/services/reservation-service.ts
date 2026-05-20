@@ -392,6 +392,8 @@ export async function createWalkInReservation(actor, input) {
   await checkSubscriptionGate(actor, 'RESERVATION_CREATE', prisma);
   const redis = getRedisClient();
 
+  const isSameDayWalkIn = formatISTDateKey(input.checkIn) === todayIST();
+
   return withRoomLock(input.roomId, redis as never, prisma, async (tx) => {
     const roomType = await tx.roomType.findFirst({
       where: { id: input.roomTypeId, propertyId: actor.propertyId, deletedAt: null },
@@ -417,22 +419,24 @@ export async function createWalkInReservation(actor, input) {
         bookingReference: generateBookingReference(),
         checkIn: input.checkIn,
         checkOut: input.checkOut,
-        status: 'CHECKED_IN',
-        source: 'WALK_IN',
+        status: isSameDayWalkIn ? 'CHECKED_IN' : 'CONFIRMED',
+        source: isSameDayWalkIn ? 'WALK_IN' : 'DIRECT_BOOKING',
         rateSnapshot: { nightlyRate: input.rate, currency: 'INR' },
         selectedCancellationPolicyId: input.selectedCancellationPolicyId ?? null,
       },
     });
 
-    const folio = await ensureOpenFolio(tx, actor, reservation.id, guest.id);
-    await postRoomCharges(tx, actor, folio.id, input.checkIn, input.checkOut, input.rate);
-    await tx.room.update({
-      where: { id: input.roomId },
-      data: {
-        state: 'OCCUPIED',
-        stateVersion: { increment: 1 },
-      },
-    });
+    if (isSameDayWalkIn) {
+      const folio = await ensureOpenFolio(tx, actor, reservation.id, guest.id);
+      await postRoomCharges(tx, actor, folio.id, input.checkIn, input.checkOut, input.rate);
+      await tx.room.update({
+        where: { id: input.roomId },
+        data: {
+          state: 'OCCUPIED',
+          stateVersion: { increment: 1 },
+        },
+      });
+    }
 
     await createReservationAudit(tx, actor, 'RESERVATION_CREATED', reservation.id, {
       bookingReference: reservation.bookingReference,
