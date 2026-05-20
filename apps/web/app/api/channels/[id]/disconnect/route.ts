@@ -11,7 +11,7 @@ type Context = { params: Promise<{ id: string }> };
 export async function POST(req: Request, context: Context) {
   const { id } = await context.params;
   return withAuth(async (_request, actor) => {
-    await checkSubscriptionGate(actor, 'CHANNEL_DISCONNECT', prisma);
+    await checkSubscriptionGate(actor, 'channel.disconnect', prisma);
     try {
       const result = await disconnectChannel({ actor, channelId: id });
       return NextResponse.json(result);

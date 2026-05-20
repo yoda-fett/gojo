@@ -31,7 +31,7 @@ function idFromContext(context: unknown) {
 }
 
 export const PATCH = withAuth(async (req, actor, context) => {
-  await checkSubscriptionGate(actor, 'PROPERTY_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'property.update', prisma);
   const params = await idFromContext(context);
   if (params?.id !== actor.propertyId) {
     throw new AppError('FORBIDDEN', 'Cannot update another property', 403);

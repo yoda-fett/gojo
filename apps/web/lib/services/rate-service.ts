@@ -3,7 +3,7 @@ import { checkSubscriptionGate, prisma } from '@gojo/db';
 import { AppError } from '@gojo/types';
 
 export async function updateRoomTypeRates(actor, roomTypeId, input) {
-  await checkSubscriptionGate(actor, 'RATE_CONFIG_UPDATE', prisma);
+  await checkSubscriptionGate(actor, 'rate.update', prisma);
 
   return prisma.$transaction(async (tx) => {
     const current = await tx.roomType.findFirst({
@@ -31,7 +31,7 @@ export async function updateRoomTypeRates(actor, roomTypeId, input) {
         propertyId: actor.propertyId,
         entityType: 'ROOM_TYPE',
         entityId: roomTypeId,
-        action: 'RATE_CONFIG_UPDATED',
+        action: 'rate.update',
         actorId: actor.userId,
         actorRole: actor.role,
         metadata: {

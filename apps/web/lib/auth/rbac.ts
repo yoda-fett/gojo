@@ -3,7 +3,7 @@ import type { Role } from '@gojo/types';
 export const PERMISSION_MATRIX: Record<Role, string[]> = {
   OWNER: ['*'],
   MANAGER: ['reservation.*', 'room.*', 'guest.*', 'folio.*', 'rate_plan.*', 'room_type.*', 'team.*', 'report.*', 'cancellation_policy.*'],
-  FRONT_DESK: ['reservation.check_in', 'reservation.check_out', 'reservation.walk_in', 'reservation.no_show', 'housekeeping.update', 'folio.payment'],
+  FRONT_DESK: ['reservation.checkIn', 'reservation.checkOut', 'reservation.walkIn', 'reservation.noShow', 'housekeeping.update', 'folio.payment'],
   HOUSEKEEPING: ['housekeeping.update'],
 };
 

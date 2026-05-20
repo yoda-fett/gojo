@@ -16,6 +16,7 @@ export type Action =
   | 'reservation.amend'
   | 'reservation.checkin'
   | 'reservation.checkout'
+  | 'reservation.noShow'
   | 'folio.post_charge'
   | 'folio.cash_payment'
   | 'invoice.generate'
@@ -61,7 +62,7 @@ export const PLAN_CONFIG: Record<Tier, { actions: readonly Action[] }> = {
   STARTER: {
     actions: [
       'reservation.create', 'reservation.cancel', 'reservation.amend',
-      'reservation.checkin', 'reservation.checkout',
+      'reservation.checkin', 'reservation.checkout', 'reservation.noShow',
       'folio.post_charge', 'folio.cash_payment',
       'direct_booking.enable', 'direct_booking.disable',
       'rate.update', 'cost_config.update',
@@ -77,7 +78,7 @@ export const PLAN_CONFIG: Record<Tier, { actions: readonly Action[] }> = {
   GROWTH: {
     actions: [
       'reservation.create', 'reservation.cancel', 'reservation.amend',
-      'reservation.checkin', 'reservation.checkout',
+      'reservation.checkin', 'reservation.checkout', 'reservation.noShow',
       'folio.post_charge', 'folio.cash_payment',
       'channel.connect', 'channel.disconnect', 'channel.rotate_secret',
       'direct_booking.enable', 'direct_booking.disable',

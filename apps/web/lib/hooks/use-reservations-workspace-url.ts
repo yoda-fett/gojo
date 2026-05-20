@@ -33,14 +33,16 @@ export function useReservationsWorkspaceUrl() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const state: ReservationsWorkspaceState = useMemo(
-    () => ({
+  const state: ReservationsWorkspaceState = useMemo(() => {
+    const isNewOpen = searchParams.get('new') === '1';
+    return {
       expandedId: searchParams.get('expanded'),
-      isNewOpen: searchParams.get('new') === '1',
-      drawer: parseDrawer(searchParams.get('drawer')),
-    }),
-    [searchParams],
-  );
+      isNewOpen,
+      // The new-reservation drawer and a row drawer (folio/history) cannot
+      // both be open. `new` wins; a stale `drawer` param is ignored.
+      drawer: isNewOpen ? null : parseDrawer(searchParams.get('drawer')),
+    };
+  }, [searchParams]);
 
   const setParams = useCallback(
     (mutator: (params: URLSearchParams) => void) => {
@@ -65,8 +67,12 @@ export function useReservationsWorkspaceUrl() {
   const setNewOpen = useCallback(
     (open: boolean) => {
       setParams((params) => {
-        if (open) params.set('new', '1');
-        else params.delete('new');
+        if (open) {
+          params.set('new', '1');
+          params.delete('drawer');
+        } else {
+          params.delete('new');
+        }
       });
     },
     [setParams],
@@ -76,8 +82,12 @@ export function useReservationsWorkspaceUrl() {
     (drawer: ReservationsDrawer | null) => {
       setParams((params) => {
         const serialised = serialiseDrawer(drawer);
-        if (serialised) params.set('drawer', serialised);
-        else params.delete('drawer');
+        if (serialised) {
+          params.set('drawer', serialised);
+          params.delete('new');
+        } else {
+          params.delete('drawer');
+        }
       });
     },
     [setParams],

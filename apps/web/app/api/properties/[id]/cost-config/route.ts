@@ -49,7 +49,7 @@ export async function POST(req: Request, context: Context) {
     }
 
     const body = schema.parse(await request.json());
-    await checkSubscriptionGate(actor, 'COST_CONFIG_UPDATE', prisma);
+    await checkSubscriptionGate(actor, 'cost_config.update', prisma);
 
     const [prev, totalRooms] = await Promise.all([
       prisma.property.findFirst({ where: { id, deletedAt: null } }),

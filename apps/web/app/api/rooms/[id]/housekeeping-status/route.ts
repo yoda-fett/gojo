@@ -18,7 +18,7 @@ type Context = { params: Promise<{ id: string }> };
 export async function PATCH(req: Request, context: Context) {
   const { id } = await context.params;
   return withAuth(async (request, actor) => {
-    await checkSubscriptionGate(actor, 'HOUSEKEEPING_UPDATE', prisma);
+    await checkSubscriptionGate(actor, 'room.update_housekeeping_status', prisma);
     try {
       const body = schema.parse(await request.json());
       const idempotencyKey = request.headers.get('idempotency-key');

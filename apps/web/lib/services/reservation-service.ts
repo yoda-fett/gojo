@@ -389,7 +389,7 @@ export async function getAvailableRooms(actor, input) {
 }
 
 export async function createWalkInReservation(actor, input) {
-  await checkSubscriptionGate(actor, 'RESERVATION_CREATE', prisma);
+  await checkSubscriptionGate(actor, 'reservation.create', prisma);
   const redis = getRedisClient();
 
   const isSameDayWalkIn = formatISTDateKey(input.checkIn) === todayIST();
@@ -546,7 +546,7 @@ export async function revealReservationGuestId(actor, reservationId) {
 }
 
 export async function checkInReservation(actor, reservationId, input) {
-  await checkSubscriptionGate(actor, 'CHECK_IN', prisma);
+  await checkSubscriptionGate(actor, 'reservation.checkin', prisma);
   const reservation = await prisma.reservation.findFirst({
     where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -745,7 +745,7 @@ export async function voidFolioLine(actor, folioId, lineId) {
 }
 
 export async function checkOutReservation(actor, reservationId, input) {
-  await checkSubscriptionGate(actor, 'CHECK_OUT', prisma);
+  await checkSubscriptionGate(actor, 'reservation.checkout', prisma);
   const reservation = await prisma.reservation.findFirst({
     where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -817,7 +817,7 @@ async function enqueueRoomChangeSms(payload) {
 }
 
 export async function amendReservation(actor, reservationId, input) {
-  await checkSubscriptionGate(actor, 'RESERVATION_AMEND', prisma);
+  await checkSubscriptionGate(actor, 'reservation.amend', prisma);
   const reservation = await prisma.reservation.findFirst({
     where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -916,7 +916,7 @@ function getCancellationFeeAmount(policy, nightlyRate) {
 }
 
 export async function cancelReservation(actor, reservationId, input) {
-  await checkSubscriptionGate(actor, 'RESERVATION_CANCEL', prisma);
+  await checkSubscriptionGate(actor, 'reservation.cancel', prisma);
   const reservation = await prisma.reservation.findFirst({
     where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -977,7 +977,7 @@ export async function cancelReservation(actor, reservationId, input) {
 }
 
 export async function markReservationNoShow(actor, reservationId, input) {
-  await checkSubscriptionGate(actor, 'RESERVATION_NO_SHOW', prisma);
+  await checkSubscriptionGate(actor, 'reservation.noShow', prisma);
   const reservation = await prisma.reservation.findFirst({
     where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
   });

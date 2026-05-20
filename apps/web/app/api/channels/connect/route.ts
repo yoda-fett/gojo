@@ -12,7 +12,7 @@ const schema = z.object({
 });
 
 export const POST = withAuth(async (req, actor) => {
-  await checkSubscriptionGate(actor, 'CHANNEL_CONNECT', prisma);
+  await checkSubscriptionGate(actor, 'channel.connect', prisma);
   try {
     const body = schema.parse(await req.json());
     const result = await connectChannel({ actor, channelType: body.channelType });
