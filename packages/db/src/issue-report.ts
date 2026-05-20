@@ -158,7 +158,7 @@ export async function createIssueReport(
   evidence: IssueEvidence,
   idempotencyKey: string,
 ) {
-  await checkSubscriptionGate(actor, 'ISSUE_REPORT_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'issue.report', prisma);
 
   if (!idempotencyKey) throw validation('idempotency-key is required', 'idempotency-key', 'REQUIRED');
   if ((evidence.voiceSeconds ?? 0) > 60) throw validation('voice clip must be 60 seconds or less', 'voiceFile', 'TOO_LONG');

@@ -56,7 +56,7 @@ export const GET = withAuth(async (req, actor) => {
 }, 'OWNER');
 
 export const POST = withAuth(async (req, actor) => {
-  await checkSubscriptionGate(actor, 'CATALOG_ITEM_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'catalog_item.create', prisma);
   const body = parseBody(await req.json());
   const item = await prisma.$transaction((tx) => createCatalogItem(actor, tx, body));
   return NextResponse.json({ ok: true, item }, { status: 201 });

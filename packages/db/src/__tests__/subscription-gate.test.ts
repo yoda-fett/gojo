@@ -34,7 +34,7 @@ describe('checkSubscriptionGate — PLAN_CONFIG paths', () => {
   it('TRIAL: permitted action resolves', async () => {
     const { db } = fakeDb({ tier: 'TRIAL', status: 'TRIAL' });
     await expect(
-      checkSubscriptionGate(actor, 'reservation.checkout', db),
+      checkSubscriptionGate(actor, 'reservation.checkOut', db),
     ).resolves.toBeUndefined();
   });
 
@@ -48,10 +48,10 @@ describe('checkSubscriptionGate — PLAN_CONFIG paths', () => {
     });
   });
 
-  it('STARTER: rate.override_below_floor blocked', async () => {
+  it('STARTER: rate.overrideBelowFloor blocked', async () => {
     const { db } = fakeDb({ tier: 'STARTER', status: 'ACTIVE' });
     await expect(
-      checkSubscriptionGate(actor, 'rate.override_below_floor', db),
+      checkSubscriptionGate(actor, 'rate.overrideBelowFloor', db),
     ).rejects.toBeInstanceOf(AppError);
   });
 
@@ -67,7 +67,7 @@ describe('checkSubscriptionGate — lifecycle states', () => {
   it('GRACE_PERIOD: whitelist action resolves', async () => {
     const { db } = fakeDb({ tier: 'STARTER', status: 'GRACE_PERIOD' });
     await expect(
-      checkSubscriptionGate(actor, 'reservation.checkin', db),
+      checkSubscriptionGate(actor, 'reservation.checkIn', db),
     ).resolves.toBeUndefined();
   });
 
@@ -91,7 +91,7 @@ describe('checkSubscriptionGate — lifecycle states', () => {
   it('SUSPENDED: non-whitelist throws SUBSCRIPTION_SUSPENDED (402)', async () => {
     const { db } = fakeDb({ tier: 'STARTER', status: 'SUSPENDED' });
     await expect(
-      checkSubscriptionGate(actor, 'reservation.checkin', db),
+      checkSubscriptionGate(actor, 'reservation.checkIn', db),
     ).rejects.toMatchObject({
       code: 'SUBSCRIPTION_SUSPENDED',
       statusCode: 402,
@@ -137,13 +137,13 @@ describe('PLAN_CONFIG sanity', () => {
   it('every tier has at least the reservation actions', () => {
     for (const tier of ['TRIAL', 'STARTER', 'GROWTH'] as const) {
       expect(PLAN_CONFIG[tier].actions).toContain('reservation.create');
-      expect(PLAN_CONFIG[tier].actions).toContain('reservation.checkout');
+      expect(PLAN_CONFIG[tier].actions).toContain('reservation.checkOut');
     }
   });
 
-  it('STARTER excludes channel.* and rate.override_below_floor', () => {
+  it('STARTER excludes channel.* and rate.overrideBelowFloor', () => {
     const starter = PLAN_CONFIG.STARTER.actions as readonly string[];
     expect(starter).not.toContain('channel.connect');
-    expect(starter).not.toContain('rate.override_below_floor');
+    expect(starter).not.toContain('rate.overrideBelowFloor');
   });
 });

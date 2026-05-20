@@ -191,7 +191,7 @@ export async function ownerTriggerLaundry(
   raw: unknown,
   options: { now?: Date } = {},
 ) {
-  await checkSubscriptionGate(actor, 'LAUNDRY_OWNER_TRIGGER', prisma);
+  await checkSubscriptionGate(actor, 'laundry.ownerTrigger', prisma);
   assertOwnerOrManager(actor);
   const body = parseOwnerTrigger(raw);
   const items = body.items.filter((item) => item.qty > 0);
@@ -295,7 +295,7 @@ export async function logLaundryOut(
     evidence?: unknown;
   },
 ) {
-  await checkSubscriptionGate(actor, 'LAUNDRY_LOG_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'laundry.log', prisma);
 
   return withIdempotency(`laundry-out:v1:${actor.propertyId}:${input.idempotencyKey}`, prisma, async () => {
     return prisma.$transaction(async (tx) => {
@@ -411,7 +411,7 @@ export async function receiveLaundry(
   actor: Actor,
   input: { idempotencyKey: string; items: ReceiveItem[]; evidence?: unknown },
 ) {
-  await checkSubscriptionGate(actor, 'LAUNDRY_RECEIVE_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'laundry.receive', prisma);
 
   return withIdempotency(`laundry-receive:v1:${actor.propertyId}:${input.idempotencyKey}`, prisma, async () => {
     return prisma.$transaction(async (tx) => {

@@ -19,7 +19,7 @@ export async function logConsumptionRefill(
     evidence?: unknown;
   },
 ) {
-  await checkSubscriptionGate(actor, 'CONSUMPTION_LOG_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'consumption.log', prisma);
 
   return withIdempotency(`consumption:v1:${actor.propertyId}:${input.idempotencyKey}`, prisma, async () => {
     const result = await prisma.$transaction(async (tx) => {

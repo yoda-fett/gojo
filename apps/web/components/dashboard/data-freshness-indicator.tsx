@@ -10,10 +10,10 @@ export function DataFreshnessIndicator({ lastPollAt, isFailing }: { lastPollAt: 
   const stale = isFailing || (!!lastPollAt && Date.now() - lastPollAt.getTime() > 2 * 60 * 1000);
 
   return (
-    <div className="hidden items-center gap-4 rounded-[8px] border border-[#e8efee] bg-white px-3 py-2 text-[12px] text-[var(--color-mid-gray)] lg:flex">
-      <span className="inline-flex items-center gap-2"><Dot className="bg-[var(--color-mid-gray)]" /> OTA: Pending SSE</span>
-      <span className="inline-flex items-center gap-2"><Dot className={stale ? 'bg-[var(--color-coral)]' : 'bg-[var(--color-teal)]'} /> Ops: {stale ? 'Data may be stale' : lastPollAt ? 'Live' : 'Loading'}</span>
-      <span className="inline-flex items-center gap-2"><Dot className="bg-[var(--color-teal)]" /> Config: Current</span>
+    <div className="hidden shrink-0 items-center gap-4 rounded-[8px] border border-[#e8efee] bg-white px-3 py-2 text-[12px] text-[var(--color-mid-gray)] lg:flex">
+      <span className="inline-flex items-center gap-2 whitespace-nowrap"><Dot className="bg-[var(--color-mid-gray)]" /> OTA: Pending SSE</span>
+      <span className="inline-flex items-center gap-2 whitespace-nowrap"><Dot className={stale ? 'bg-[var(--color-coral)]' : 'bg-[var(--color-teal)]'} /> Ops: {stale ? 'Data may be stale' : lastPollAt ? 'Live' : 'Loading'}</span>
+      <span className="inline-flex items-center gap-2 whitespace-nowrap"><Dot className="bg-[var(--color-teal)]" /> Config: Current</span>
     </div>
   );
 }

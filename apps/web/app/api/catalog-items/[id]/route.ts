@@ -43,7 +43,7 @@ function parsePatch(raw: unknown) {
 }
 
 export const PATCH = withAuth(async (req, actor, context) => {
-  await checkSubscriptionGate(actor, 'CATALOG_ITEM_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'catalog_item.update', prisma);
   const { id } = (await idFromContext(context)) ?? { id: '' };
   const body = parsePatch(await req.json());
   const item = await prisma.$transaction((tx) => updateCatalogItem(actor, tx, id, body));
@@ -51,7 +51,7 @@ export const PATCH = withAuth(async (req, actor, context) => {
 }, 'OWNER');
 
 export const DELETE = withAuth(async (req, actor, context) => {
-  await checkSubscriptionGate(actor, 'CATALOG_ITEM_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'catalog_item.delete', prisma);
   const { id } = (await idFromContext(context)) ?? { id: '' };
   const body = DeleteBody.parse(await req.json().catch(() => undefined));
   const item = await prisma.$transaction((tx) => deleteCatalogItem(actor, tx, id, body?.stateVersion));

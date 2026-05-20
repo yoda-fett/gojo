@@ -281,7 +281,7 @@ export async function getPendingReview(actor: Actor, filters: { attributionStrea
 }
 
 export async function recordInventoryArrival(actor: Actor, raw: unknown) {
-  await checkSubscriptionGate(actor, 'INVENTORY_ARRIVAL_RECORD', prisma);
+  await checkSubscriptionGate(actor, 'inventory.recordArrival', prisma);
   assertOwnerOrManager(actor);
   const body = parsePayload(ArrivalSchema, raw);
 
@@ -333,7 +333,7 @@ export async function recordInventoryArrival(actor: Actor, raw: unknown) {
 }
 
 export async function recordInventoryWriteOff(actor: Actor, raw: unknown) {
-  await checkSubscriptionGate(actor, 'INVENTORY_WRITE_OFF_RECORD', prisma);
+  await checkSubscriptionGate(actor, 'inventory.recordWriteOff', prisma);
   assertOwnerOrManager(actor);
   const body = parsePayload(WriteOffSchema, raw);
 
@@ -393,7 +393,7 @@ export async function recordInventoryWriteOff(actor: Actor, raw: unknown) {
 }
 
 export async function approveIssueReports(actor: Actor, id: string, idsParam?: string | null) {
-  await checkSubscriptionGate(actor, 'WRITE_OFF_APPROVE', prisma);
+  await checkSubscriptionGate(actor, 'inventory.approveWriteOff', prisma);
   assertOwnerOrManager(actor);
   const ids = idsFrom(id, idsParam);
   if (ids.length === 0) throw new AppError('VALIDATION_ERROR', 'At least one issue report id is required', 422);
@@ -492,7 +492,7 @@ export async function approveIssueReports(actor: Actor, id: string, idsParam?: s
 }
 
 export async function rejectIssueReports(actor: Actor, id: string, idsParam: string | null | undefined, raw: unknown) {
-  await checkSubscriptionGate(actor, 'WRITE_OFF_REJECT', prisma);
+  await checkSubscriptionGate(actor, 'inventory.rejectWriteOff', prisma);
   assertOwnerOrManager(actor);
   const ids = idsFrom(id, idsParam);
   const body = parsePayload(RejectSchema, raw ?? {});

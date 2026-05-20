@@ -120,7 +120,7 @@ export async function rotateSecret({
   actor: { userId: string; propertyId: string; role: string };
   channelId: string;
 }) {
-  await checkSubscriptionGate(actor, 'channel.rotate_secret', prisma);
+  await checkSubscriptionGate(actor, 'channel.rotateSecret', prisma);
   const channel = await prisma.channel.findFirst({
     where: { id: channelId, propertyId: actor.propertyId, deletedAt: null },
   });

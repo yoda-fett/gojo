@@ -129,7 +129,7 @@ export async function getRoomStock(actor: Actor) {
 }
 
 export async function generateRefillAssignments(actor: Actor, raw: unknown) {
-  await checkSubscriptionGate(actor, 'ROOM_ASSIGNMENT_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'room_assignment.write', prisma);
   assertOwnerOrManager(actor);
   const body = parseRefillBulk(raw);
   const roomIds = Array.from(new Set(body.roomIds));

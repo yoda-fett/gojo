@@ -14,92 +14,136 @@ export type Action =
   | 'reservation.create'
   | 'reservation.cancel'
   | 'reservation.amend'
-  | 'reservation.checkin'
-  | 'reservation.checkout'
+  | 'reservation.checkIn'
+  | 'reservation.checkOut'
   | 'reservation.noShow'
-  | 'folio.post_charge'
-  | 'folio.cash_payment'
+  | 'folio.postCharge'
+  | 'folio.cashPayment'
   | 'invoice.generate'
-  | 'invoice.credit_note'
+  | 'invoice.creditNote'
   | 'channel.connect'
   | 'channel.disconnect'
-  | 'channel.rotate_secret'
+  | 'channel.rotateSecret'
   | 'direct_booking.enable'
   | 'direct_booking.disable'
-  | 'rate.override_below_floor'
+  | 'rate.overrideBelowFloor'
   | 'rate.update'
   | 'cost_config.update'
   | 'audit_log.read'
   | 'subscription.upgrade'
   | 'subscription.downgrade'
   | 'subscription.cancel'
-  | 'room.update_housekeeping_status'
-  | 'room.create_block'
-  | 'room.lift_block'
+  | 'room.updateHousekeepingStatus'
+  | 'room.createBlock'
+  | 'room.liftBlock'
   | 'user.invite'
   | 'user.remove'
   | 'property.update'
-  | 'guest_id.reveal';
+  | 'guest_id.reveal'
+  | 'issue.report'
+  | 'catalog_item.create'
+  | 'catalog_item.update'
+  | 'catalog_item.delete'
+  | 'room_assignment.create'
+  | 'room_assignment.update'
+  | 'room_assignment.delete'
+  | 'room_assignment.write'
+  | 'reconciliation.acknowledge'
+  | 'laundry.ownerTrigger'
+  | 'laundry.log'
+  | 'laundry.receive'
+  | 'consumption.log'
+  | 'inventory.recordArrival'
+  | 'inventory.recordWriteOff'
+  | 'inventory.approveWriteOff'
+  | 'inventory.rejectWriteOff';
 
 export const PLAN_CONFIG: Record<Tier, { actions: readonly Action[] }> = {
   TRIAL: {
     actions: [
       'reservation.create', 'reservation.cancel', 'reservation.amend',
-      'reservation.checkin', 'reservation.checkout',
-      'folio.post_charge', 'folio.cash_payment',
-      'channel.connect', 'channel.disconnect', 'channel.rotate_secret',
+      'reservation.checkIn', 'reservation.checkOut',
+      'folio.postCharge', 'folio.cashPayment',
+      'channel.connect', 'channel.disconnect', 'channel.rotateSecret',
       'direct_booking.enable', 'direct_booking.disable',
       'rate.update', 'cost_config.update',
       'audit_log.read',
       'subscription.upgrade',
-      'room.update_housekeeping_status', 'room.create_block', 'room.lift_block',
+      'room.updateHousekeepingStatus', 'room.createBlock', 'room.liftBlock',
       'user.invite', 'user.remove',
       'property.update',
       'guest_id.reveal',
-      'invoice.generate', 'invoice.credit_note',
+      'invoice.generate', 'invoice.creditNote',
+      'issue.report',
+      'catalog_item.create', 'catalog_item.update', 'catalog_item.delete',
+      'room_assignment.create', 'room_assignment.update', 'room_assignment.delete',
+      'room_assignment.write',
+      'reconciliation.acknowledge',
+      'laundry.ownerTrigger', 'laundry.log', 'laundry.receive',
+      'consumption.log',
+      'inventory.recordArrival', 'inventory.recordWriteOff',
+      'inventory.approveWriteOff', 'inventory.rejectWriteOff',
     ],
   },
   STARTER: {
     actions: [
       'reservation.create', 'reservation.cancel', 'reservation.amend',
-      'reservation.checkin', 'reservation.checkout', 'reservation.noShow',
-      'folio.post_charge', 'folio.cash_payment',
+      'reservation.checkIn', 'reservation.checkOut', 'reservation.noShow',
+      'folio.postCharge', 'folio.cashPayment',
       'direct_booking.enable', 'direct_booking.disable',
       'rate.update', 'cost_config.update',
       'audit_log.read',
       'subscription.upgrade', 'subscription.downgrade', 'subscription.cancel',
-      'room.update_housekeeping_status', 'room.create_block', 'room.lift_block',
+      'room.updateHousekeepingStatus', 'room.createBlock', 'room.liftBlock',
       'user.invite', 'user.remove',
       'property.update',
       'guest_id.reveal',
-      'invoice.generate', 'invoice.credit_note',
+      'invoice.generate', 'invoice.creditNote',
+      'issue.report',
+      'catalog_item.create', 'catalog_item.update', 'catalog_item.delete',
+      'room_assignment.create', 'room_assignment.update', 'room_assignment.delete',
+      'room_assignment.write',
+      'reconciliation.acknowledge',
+      'laundry.ownerTrigger', 'laundry.log', 'laundry.receive',
+      'consumption.log',
+      'inventory.recordArrival', 'inventory.recordWriteOff',
+      'inventory.approveWriteOff', 'inventory.rejectWriteOff',
     ],
   },
   GROWTH: {
     actions: [
       'reservation.create', 'reservation.cancel', 'reservation.amend',
-      'reservation.checkin', 'reservation.checkout', 'reservation.noShow',
-      'folio.post_charge', 'folio.cash_payment',
-      'channel.connect', 'channel.disconnect', 'channel.rotate_secret',
+      'reservation.checkIn', 'reservation.checkOut', 'reservation.noShow',
+      'folio.postCharge', 'folio.cashPayment',
+      'channel.connect', 'channel.disconnect', 'channel.rotateSecret',
       'direct_booking.enable', 'direct_booking.disable',
-      'rate.update', 'rate.override_below_floor',
+      'rate.update', 'rate.overrideBelowFloor',
       'cost_config.update',
       'audit_log.read',
       'subscription.upgrade', 'subscription.downgrade', 'subscription.cancel',
-      'room.update_housekeeping_status', 'room.create_block', 'room.lift_block',
+      'room.updateHousekeepingStatus', 'room.createBlock', 'room.liftBlock',
       'user.invite', 'user.remove',
       'property.update',
       'guest_id.reveal',
-      'invoice.generate', 'invoice.credit_note',
+      'invoice.generate', 'invoice.creditNote',
+      'issue.report',
+      'catalog_item.create', 'catalog_item.update', 'catalog_item.delete',
+      'room_assignment.create', 'room_assignment.update', 'room_assignment.delete',
+      'room_assignment.write',
+      'reconciliation.acknowledge',
+      'laundry.ownerTrigger', 'laundry.log', 'laundry.receive',
+      'consumption.log',
+      'inventory.recordArrival', 'inventory.recordWriteOff',
+      'inventory.approveWriteOff', 'inventory.rejectWriteOff',
     ],
   },
 };
 
 export const GRACE_PERIOD_WHITELIST: readonly Action[] = [
-  'reservation.checkin',
-  'reservation.checkout',
-  'folio.post_charge',
-  'folio.cash_payment',
+  'reservation.checkIn',
+  'reservation.checkOut',
+  'folio.postCharge',
+  'folio.cashPayment',
   'invoice.generate',
   'audit_log.read',
   'subscription.upgrade',

@@ -62,9 +62,9 @@ const itemSchema = z.object({
 const bodySchema = z.object({ items: z.array(itemSchema).min(1) });
 
 export const POST = withAuth(async (req, actor) => {
-  // AC1 spec reuses CATALOG_ITEM_WRITE as the gate (per user decision 2026-05-15
+  // AC1 spec reuses catalog_item.create as the gate (per user decision 2026-05-15
   // — cold-start linen seed is conceptually a catalog seeding step).
-  await checkSubscriptionGate(actor, 'CATALOG_ITEM_WRITE', prisma);
+  await checkSubscriptionGate(actor, 'catalog_item.create', prisma);
 
   const body = bodySchema.parse(await req.json());
 

@@ -577,7 +577,7 @@ export async function revealReservationGuestId(actor, reservationId) {
 }
 
 export async function checkInReservation(actor, reservationId, input) {
-  await checkSubscriptionGate(actor, 'reservation.checkin', prisma);
+  await checkSubscriptionGate(actor, 'reservation.checkIn', prisma);
   const reservation = await prisma.reservation.findFirst({
     where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -660,7 +660,7 @@ export async function getReservationFolio(actor, reservationId) {
 }
 
 export async function addFolioLine(actor, folioId, input) {
-  await checkSubscriptionGate(actor, 'folio.post_charge', prisma);
+  await checkSubscriptionGate(actor, 'folio.postCharge', prisma);
   const folio = await prisma.folio.findFirst({
     where: { id: folioId, propertyId: actor.propertyId, deletedAt: null },
   });
@@ -729,7 +729,7 @@ async function getReservationFolioByFolio(actor, folioId) {
 }
 
 export async function voidFolioLine(actor, folioId, lineId) {
-  await checkSubscriptionGate(actor, 'folio.post_charge', prisma);
+  await checkSubscriptionGate(actor, 'folio.postCharge', prisma);
   if (!['OWNER', 'MANAGER'].includes(actor.role)) {
     throw new AppError('FORBIDDEN', 'Only owners and managers can void folio lines', 403);
   }
@@ -776,7 +776,7 @@ export async function voidFolioLine(actor, folioId, lineId) {
 }
 
 export async function checkOutReservation(actor, reservationId, input) {
-  await checkSubscriptionGate(actor, 'reservation.checkout', prisma);
+  await checkSubscriptionGate(actor, 'reservation.checkOut', prisma);
   const reservation = await prisma.reservation.findFirst({
     where: { id: reservationId, propertyId: actor.propertyId, deletedAt: null },
   });

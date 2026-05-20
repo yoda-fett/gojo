@@ -22,7 +22,7 @@ export async function createRoomBlock({
   endDate: Date;
   reason: string;
 }) {
-  await checkSubscriptionGate(actor, 'room.create_block', prisma);
+  await checkSubscriptionGate(actor, 'room.createBlock', prisma);
   if (endDate < startDate) {
     throw new AppError('VALIDATION_ERROR', 'endDate must be on or after startDate', 400);
   }
@@ -77,7 +77,7 @@ export async function liftRoomBlock({
   actor: { userId: string; propertyId: string; role: string };
   blockId: string;
 }) {
-  await checkSubscriptionGate(actor, 'room.lift_block', prisma);
+  await checkSubscriptionGate(actor, 'room.liftBlock', prisma);
   const block = await prisma.roomBlock.findFirst({
     where: { id: blockId, propertyId: actor.propertyId, deletedAt: null },
   });

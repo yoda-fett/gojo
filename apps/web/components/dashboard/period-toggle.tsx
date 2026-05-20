@@ -60,7 +60,7 @@ export function PeriodToggle({ value, onChange }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex shrink-0 items-center gap-2">
       <div
         style={{
           display: 'flex',
@@ -120,6 +120,7 @@ export function PeriodToggle({ value, onChange }: Props) {
             display: 'flex',
             alignItems: 'center',
             gap: 6,
+            whiteSpace: 'nowrap',
             padding: '7px 14px',
             borderRadius: 6,
             fontSize: 13,

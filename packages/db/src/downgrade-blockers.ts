@@ -57,7 +57,7 @@ export async function checkDowngradeBlockers(
 
   // Below-floor rate overrides used recently — warn but allow.
   // The spec lists this as a blocker; semantically it's "acknowledge" not "fix".
-  if (!targetTierAllows(targetTier, 'rate.override_below_floor')) {
+  if (!targetTierAllows(targetTier, 'rate.overrideBelowFloor')) {
     const since = new Date(Date.now() - RATE_OVERRIDE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
     const recentOverrides = await db.auditLog.count({
       where: {

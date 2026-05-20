@@ -19,7 +19,7 @@ type Context = { params: Promise<{ id: string }> };
 export async function POST(req: Request, context: Context) {
   const { id } = await context.params;
   return withAuth(async (request, actor) => {
-    await checkSubscriptionGate(actor, 'room.create_block', prisma);
+    await checkSubscriptionGate(actor, 'room.createBlock', prisma);
     try {
       const body = schema.parse(await request.json());
       const block = await createRoomBlock({
