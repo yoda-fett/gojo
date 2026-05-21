@@ -16,7 +16,7 @@ const presets: { key: RangePreset; label: string }[] = [
   { key: '90d', label: 'Last 90 days' },
 ];
 
-const storageKey = 'gojo:dashboard:dateRange';
+const DEFAULT_STORAGE_KEY = 'gojo:dashboard:dateRange';
 
 export function DateSelector({
   value,
@@ -24,12 +24,16 @@ export function DateSelector({
   includeAdvanced = false,
   triggerClassName,
   valueClassName,
+  defaultPreset = 'today',
+  storageKey = DEFAULT_STORAGE_KEY,
 }: {
   value?: DateRange;
   onChange: (next: DateRange) => void;
   includeAdvanced?: boolean;
   triggerClassName?: string;
   valueClassName?: string;
+  defaultPreset?: RangePreset;
+  storageKey?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [customFrom, setCustomFrom] = useState('');
@@ -50,18 +54,18 @@ export function DateSelector({
 
     const raw = window.sessionStorage.getItem(storageKey);
     if (!raw) {
-      onChange(buildRange('today'));
+      onChange(buildRange(defaultPreset));
       return;
     }
 
     try {
       onChange(JSON.parse(raw) as DateRange);
     } catch {
-      onChange(buildRange('today'));
+      onChange(buildRange(defaultPreset));
     }
-  }, [onChange, value]);
+  }, [onChange, value, defaultPreset, storageKey]);
 
-  const current = value ?? buildRange('today');
+  const current = value ?? buildRange(defaultPreset);
   const advanced = useMemo(() => (includeAdvanced ? [{ key: 'mtd' as const, label: 'MTD' }, { key: 'ytd' as const, label: 'YTD' }] : []), [includeAdvanced]);
 
   return (

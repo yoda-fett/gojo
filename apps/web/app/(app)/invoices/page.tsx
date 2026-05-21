@@ -1,10 +1,8 @@
 // @ts-nocheck
-import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
-
 import { prisma } from '@gojo/db';
 
 import { InvoiceFilterBar } from '@/components/invoices/invoice-filter-bar';
+import { InvoiceTable, type InvoiceRow } from '@/components/invoices/invoice-table';
 import { ReportCard } from '@/components/reports/report-card';
 import { ReportKpiCard } from '@/components/reports/report-kpi-card';
 import { ReportTopbarControls } from '@/components/reports/report-topbar-controls';
@@ -30,12 +28,6 @@ function formatMonthYear(rangeFrom: string): string {
   const d = new Date(`${rangeFrom}T00:00:00+05:30`);
   if (Number.isNaN(d.getTime())) return rangeFrom;
   return d.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
-}
-
-// "18 May" form for in-table dates per koko's spec.
-function formatDayMonth(date: Date): string {
-  const ist = new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
-  return ist.toLocaleString('en-IN', { day: '2-digit', month: 'short', timeZone: 'UTC' });
 }
 
 // GST state codes for the few states we operate in. Prefer the GSTIN prefix
@@ -148,6 +140,27 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
     { taxable: 0, cgst: 0, sgst: 0, total: 0, count: 0, b2b: 0, creditNotes: 0 },
   );
 
+  // Flatten to a serializable shape for the client table. Decimal columns are
+  // converted to numbers here so the row component stays presentation-only.
+  const invoiceRows: InvoiceRow[] = invoices.map((inv) => {
+    const linkedReservation = reservationForInvoice(inv.folioId);
+    return {
+      id: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      type: inv.type,
+      recipientName: inv.recipientName,
+      recipientGstin: inv.recipientGstin,
+      checkOut: inv.checkOut.toISOString(),
+      taxableValue: numberize(inv.taxableValue),
+      cgstAmount: numberize(inv.cgstAmount),
+      sgstAmount: numberize(inv.sgstAmount),
+      totalAmount: numberize(inv.totalAmount),
+      status: inv.status,
+      bookingReference: linkedReservation?.bookingReference ?? null,
+      reservationId: linkedReservation?.id ?? null,
+    };
+  });
+
   return (
     <div>
       <Topbar
@@ -243,99 +256,7 @@ export default async function InvoicesPage({ searchParams }: { searchParams?: Pr
 
         <div className="flex flex-col gap-5">
           <ReportCard title="Tax Invoices" subtitle={`${invoices.length} document${invoices.length === 1 ? '' : 's'} · ${range.from} to ${range.to}`} bodyPadding={false}>
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left text-[13px]">
-                <thead>
-                  <tr style={{ background: '#FAFCFC' }}>
-                    {[
-                      { label: 'Invoice No.', align: 'left' as const },
-                      { label: 'Booking', align: 'left' as const },
-                      { label: 'Type', align: 'left' as const },
-                      { label: 'Recipient', align: 'left' as const },
-                      { label: 'Check-out', align: 'left' as const },
-                      { label: 'Taxable', align: 'right' as const },
-                      { label: 'CGST', align: 'right' as const },
-                      { label: 'SGST', align: 'right' as const },
-                      { label: 'Total', align: 'right' as const },
-                      { label: 'Status', align: 'left' as const },
-                      { label: '', align: 'right' as const },
-                    ].map((col) => (
-                      <th
-                        key={col.label || 'arrow'}
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 600,
-                          color: '#9EAEAC',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.6px',
-                          padding: '10px 24px',
-                          borderBottom: '1px solid #F0F5F4',
-                          textAlign: col.align,
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {col.label}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {invoices.map((inv) => {
-                    const isCredit = inv.type === 'CREDIT_NOTE';
-                    const sign = isCredit ? -1 : 1;
-                    const linkedReservation = reservationForInvoice(inv.folioId);
-                    const detailHref = linkedReservation?.id ? `/reservations/${linkedReservation.id}` : null;
-                    return (
-                      <tr key={inv.id} className="border-t border-[#F0F5F4] hover:bg-[var(--color-off-white)]">
-                        <td className="px-6 py-3 font-mono text-[12px] font-semibold text-[var(--color-charcoal)]">{inv.invoiceNumber}</td>
-                        <td className="px-2 py-3 font-mono text-[12px] text-[var(--color-mid-gray)]">
-                          {linkedReservation?.bookingReference ?? '—'}
-                        </td>
-                        <td className="px-6 py-3">
-                          <span className={`inline-flex rounded-[4px] px-1.5 py-0.5 text-[11px] font-medium ${isCredit ? 'bg-[rgba(232,118,63,0.12)] text-[#C45A20]' : inv.recipientGstin ? 'bg-[rgba(29,168,136,0.1)] text-[#0A6B58]' : 'bg-[rgba(158,174,172,0.12)] text-[#6B7574]'}`}>
-                            {isCredit ? 'Credit Note' : inv.recipientGstin ? 'B2B' : 'B2C'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-3">
-                          <div className="text-[var(--color-charcoal)]">{inv.recipientName}</div>
-                          {inv.recipientGstin ? (
-                            <div className="font-mono text-[11px] text-[var(--color-mid-gray)]">{inv.recipientGstin}</div>
-                          ) : null}
-                        </td>
-                        <td className="px-6 py-3 text-[var(--color-mid-gray)]">{formatDayMonth(inv.checkOut)}</td>
-                        <td className="px-6 py-3 text-right text-[var(--color-charcoal)]">{formatInr(sign * numberize(inv.taxableValue))}</td>
-                        <td className="px-6 py-3 text-right text-[var(--color-mid-gray)]">{formatInr(sign * numberize(inv.cgstAmount))}</td>
-                        <td className="px-6 py-3 text-right text-[var(--color-mid-gray)]">{formatInr(sign * numberize(inv.sgstAmount))}</td>
-                        <td className="px-6 py-3 text-right font-semibold text-[var(--color-charcoal)]">{formatInr(sign * numberize(inv.totalAmount))}</td>
-                        <td className="px-6 py-3">
-                          <span className={`inline-flex rounded-[4px] px-1.5 py-0.5 text-[11px] font-medium ${inv.status === 'PAID' ? 'bg-[rgba(29,168,136,0.12)] text-[#0A6B58]' : inv.status === 'VOID' ? 'bg-[rgba(232,118,63,0.12)] text-[#C45A20]' : 'bg-[rgba(158,174,172,0.18)] text-[var(--color-charcoal)]'}`}>
-                            {inv.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-3 text-right">
-                          {detailHref ? (
-                            <Link
-                              href={detailHref}
-                              aria-label={`Open booking ${linkedReservation?.bookingReference ?? ''}`}
-                              className="inline-flex size-7 items-center justify-center rounded-md text-[var(--color-mid-gray)] hover:bg-[var(--color-line-soft)] hover:text-[var(--color-teal)]"
-                            >
-                              <ChevronRight className="size-4" />
-                            </Link>
-                          ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {invoices.length === 0 ? (
-                    <tr>
-                      <td colSpan={11} className="px-6 py-10 text-center text-[13px] text-[var(--color-mid-gray)]">
-                        No invoices match the current filters.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
+            <InvoiceTable rows={invoiceRows} />
             <div className="flex items-center justify-between border-t-2 border-[#E8EFEE] px-6 py-3.5">
               <span className="text-[13px] font-semibold text-[var(--color-mid-gray)]">Total</span>
               <span className="text-[15px] font-bold text-[var(--color-charcoal)]">{formatInr(totals.total)} billed · {formatInr(totals.cgst + totals.sgst)} GST</span>

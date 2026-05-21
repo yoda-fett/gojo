@@ -312,6 +312,8 @@ export function FilterBar({ roomTypes }: { roomTypes: Array<{ id: string; name: 
           <span style={LABEL}>Dates</span>
           <DateSelector
             value={from && to ? { from, to, label: formatFilterDateRange(from, to) } : undefined}
+            defaultPreset="7d"
+            storageKey="gojo:reservations:dateRange"
             triggerClassName="text-[13px]"
             valueClassName="text-[13px]"
             onChange={(next) =>

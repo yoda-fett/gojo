@@ -1,7 +1,8 @@
-// Themed demo seed — nine anime-flavoured properties across three franchises.
-// Idempotent: re-running upserts records by stable string IDs (no drops).
+// Themed demo seed — fourteen film/anime-flavoured properties across five
+// franchises. Idempotent: re-running upserts records by stable string IDs
+// (no drops).
 //
-// Layout (9 properties · 3 franchises · 3 tiers · 3 cities):
+// Layout (14 properties · 5 franchises · 3 tiers · 3 cities):
 //   One Piece    — Thousand Sunny Resort   · GROWTH  · Darjeeling · co-owned
 //                — Going Merry Lodge        · STARTER · Gangtok
 //                — Baratie Floating Stay    · TRIAL   · Kalimpong  · coldStart {}
@@ -11,13 +12,21 @@
 //   Naruto       — Konoha Leaf Lodge        · TRIAL   · Kalimpong  · coldStart {}
 //                — Sand Village Inn         · STARTER · Darjeeling
 //                — Hokage Tower Hotel       · GROWTH  · Gangtok    · co-owned
+//   John Wick    — The Continental Darjeeling · GROWTH  · Darjeeling · co-owned
+//                — The Continental Gangtok    · STARTER · Gangtok    · coldStart {}
+//                — The Continental Kalimpong  · TRIAL   · Kalimpong  · co-owned · coldStart {}
+//   The Matrix   — Zion Sanctuary             · GROWTH  · Gangtok    · co-owned
+//                — Nebuchadnezzar Lodge       · TRIAL   · Kalimpong  · coldStart {}
 //
 // Rules honoured:
-//   · 3 multi-property owners — Luffy / Tanjiro / Naruto each own 3 properties.
-//   · 3 co-owned properties — Thousand Sunny (+Shanks), Wisteria (+Rengoku),
-//     Hokage Tower (+Kakashi) each carry two OWNER access rows.
+//   · 6 multi-property owners — Luffy / Tanjiro / Naruto each own 3 anime
+//     properties; Winston owns 3 Continentals, Marquis owns 2, Morpheus owns 2.
+//   · 6 co-owned properties — Thousand Sunny (+Shanks), Wisteria (+Rengoku),
+//     Hokage Tower (+Kakashi), Continental Darjeeling (+Marquis), Continental
+//     Kalimpong (+Winston), Zion Sanctuary (+Niobe) — two OWNER rows each.
 //   · 1 MANAGER per property; Nico Robin manages two of Luffy's properties
-//     (Thousand Sunny + Going Merry).
+//     (Thousand Sunny + Going Merry); Charon manages two of Winston's
+//     Continentals (Darjeeling + Gangtok).
 //   · Every property: ~1 year of reservations + a fill-up pass guaranteeing
 //     ≥4 arrivals AND ≥4 departures per ISO week across May + June 2026
 //     (current + coming month), GST invoices, audit logs, housekeeping tasks.
@@ -47,7 +56,9 @@ function rng(seedStr: string) {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // "Now" for the seed — aligned with the demo's current calendar month.
-const NOW = new Date('2026-05-21T00:00:00.000Z');
+//const NOW = new Date('2026-05-21T00:00:00.000Z');
+const NOW = new Date();
+NOW.setHours(0, 0, 0, 0); // sets time to midnight
 // Reservation window: 1 year back, 2 months forward (covers May + June 2026).
 const PAST_DAYS = 365;
 const FUTURE_DAYS = 60;
@@ -81,12 +92,27 @@ const SAKURA: CharacterDef = { id: 'anime-user-sakura', name: 'Sakura Haruno', p
 const GAARA: CharacterDef = { id: 'anime-user-gaara', name: 'Gaara', phone: '+919000030007' };
 const SHIKAMARU: CharacterDef = { id: 'anime-user-shikamaru', name: 'Shikamaru Nara', phone: '+919000030008' };
 
+// John Wick / The Matrix cast — three more multi-property owners.
+//   Winston   — owns the Continental Darjeeling + Gangtok, co-owns Kalimpong.
+//   Marquis   — owns the Continental Kalimpong, co-owns Darjeeling.
+//   Morpheus  — owns Zion Sanctuary + Nebuchadnezzar Lodge.
+const WINSTON: CharacterDef = { id: 'anime-user-winston', name: 'Winston Scott', phone: '+919000010004' };
+const MARQUIS: CharacterDef = { id: 'anime-user-marquis', name: 'Marquis de Gramont', phone: '+919000010005' };
+const MORPHEUS: CharacterDef = { id: 'anime-user-morpheus', name: 'Morpheus', phone: '+919000010006' };
+// Co-owner — shares ownership of Zion Sanctuary.
+const NIOBE: CharacterDef = { id: 'anime-user-niobe', name: 'Captain Niobe', phone: '+919000020004' };
+// Managers — Charon covers two of Winston's Continentals (rule 7).
+const CHARON: CharacterDef = { id: 'anime-user-charon', name: 'Charon', phone: '+919000030009' };
+const CASSIAN: CharacterDef = { id: 'anime-user-cassian', name: 'Cassian', phone: '+919000030010' };
+const TANK: CharacterDef = { id: 'anime-user-tank', name: 'Tank', phone: '+919000030011' };
+const LINK: CharacterDef = { id: 'anime-user-link', name: 'Link', phone: '+919000030012' };
+
 type RoomTypeKey = 'std' | 'dlx' | 'suite';
 
 interface ThemeDef {
   key: string;
   index: number; // 1-based property index — used for phone derivation
-  franchise: 'One Piece' | 'Demon Slayer' | 'Naruto';
+  franchise: 'One Piece' | 'Demon Slayer' | 'Naruto' | 'John Wick' | 'The Matrix';
   refPrefix: string; // booking-ref / invoice-number prefix
   property: {
     id: string;
@@ -167,6 +193,15 @@ const NA_GUESTS = [
   'Sasuke Uchiha', 'Hinata Hyuga', 'Neji Hyuga', 'Tenten', 'Kiba Inuzuka', 'Shino Aburame', 'Jiraiya', 'Tsunade',
   'Itachi Uchiha', 'Minato Namikaze', 'Kushina Uzumaki', 'Asuma Sarutobi', 'Kurenai Yuhi', 'Might Guy', 'Iruka Umino', 'Hashirama Senju',
   'Tobirama Senju', 'Hiruzen Sarutobi', 'Obito Uchiha', 'Rin Nohara', 'Killer Bee', 'Yamato Tenzo', 'Sai Yamanaka', 'Anko Mitarashi',
+];
+const JW_GUESTS = [
+  'Aurelio', 'Berrada', "Santino D'Antonio", "Gianna D'Antonio", 'Ares', 'Ms. Perkins', 'Helen Wick', 'Iosef Tarasov',
+  'Viggo Tarasov', 'Abram Tarasov', 'Sofia Al-Azwar', 'Killa Harkan', 'Caine', 'Akira Shimazu', 'The Harbinger', 'The Adjudicator',
+  'Zero', 'Earl', 'The Elder', 'Julius', 'The Director', 'Mr. Nobody', 'Tick Tock Man', 'Charlie Cleaner',
+];
+const MX_GUESTS = [
+  'Neo', 'Trinity', 'Dozer', 'Switch', 'Apoc', 'Mouse', 'Cypher', 'Agent Smith',
+  'The Oracle', 'The Architect', 'Seraph', 'Sati', 'The Merovingian', 'Persephone', 'The Keymaker', 'Commander Lock',
 ];
 
 function buildThemes(): ThemeDef[] {
@@ -249,7 +284,7 @@ function buildThemes(): ThemeDef[] {
         name: 'Baratie Floating Stay',
         city: 'Kalimpong',
         state: 'West Bengal',
-        pincode: '734301',
+        pincode: '734311',
         address: '9 Rishi Road, Kalimpong',
       },
       tier: 'TRIAL',
@@ -314,7 +349,7 @@ function buildThemes(): ThemeDef[] {
         name: 'Wisteria Estate',
         city: 'Darjeeling',
         state: 'West Bengal',
-        pincode: '734101',
+        pincode: '734102',
         address: '22 Mall Road, Darjeeling',
       },
       tier: 'GROWTH',
@@ -347,7 +382,7 @@ function buildThemes(): ThemeDef[] {
         name: 'Mugen Train Inn',
         city: 'Kalimpong',
         state: 'West Bengal',
-        pincode: '734301',
+        pincode: '734309',
         address: '3 Deolo Hill Road, Kalimpong',
       },
       tier: 'TRIAL',
@@ -412,7 +447,7 @@ function buildThemes(): ThemeDef[] {
         name: 'Sand Village Inn',
         city: 'Darjeeling',
         state: 'West Bengal',
-        pincode: '734101',
+        pincode: '734102',
         address: '5 Mall Road, Darjeeling',
       },
       tier: 'STARTER',
@@ -465,6 +500,170 @@ function buildThemes(): ThemeDef[] {
       rooms: mkRooms('na-hokage', 4, 3, 2),
       sourceMix: { DIRECT_BOOKING: 0.4, OTA: 0.45, WALK_IN: 0.15 },
       coldStartProgressEmpty: false,
+    },
+    // ── John Wick ──────────────────────────────────────────────────────────
+    {
+      key: 'jw-cont-dar',
+      index: 10,
+      franchise: 'John Wick',
+      refPrefix: 'TCD',
+      property: {
+        id: 'anime-prop-jw-cont-dar',
+        slug: 'continental-darjeeling',
+        name: 'The Continental Darjeeling',
+        city: 'Darjeeling',
+        state: 'West Bengal',
+        pincode: '734103',
+        address: '1 High Table Row, Chowrasta',
+      },
+      tier: 'GROWTH',
+      owner: WINSTON,
+      coOwners: [MARQUIS], // Rule 8 — co-owned.
+      manager: CHARON,
+      housekeepers: [
+        { id: 'anime-user-francis', name: 'Francis Doorman', phone: hkPhone(10, 1) },
+        { id: 'anime-user-continental-tailor', name: 'The Continental Tailor', phone: hkPhone(10, 2) },
+      ],
+      guests: mkGuests('TCD', 10, JW_GUESTS.slice(0, 8)),
+      reservationCount: 70,
+      roomTypes: [
+        { id: 'anime-rt-jw-cont-dar-std', name: 'Continental King', maxOccupancy: 2, baseRate: '5400.00', floorRate: '4700.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-jw-cont-dar-dlx', name: 'High Table Suite', maxOccupancy: 3, baseRate: '9900.00', floorRate: '8700.00', gstSlab: '18%', amenities: ['WiFi', 'Valley View'] },
+        { id: 'anime-rt-jw-cont-dar-suite', name: "Manager's Penthouse", maxOccupancy: 4, baseRate: '16000.00', floorRate: '14200.00', gstSlab: '18%', amenities: ['WiFi', 'Valley View', 'Lounge'] },
+      ],
+      rooms: mkRooms('jw-cont-dar', 4, 3, 2),
+      sourceMix: { DIRECT_BOOKING: 0.4, OTA: 0.45, WALK_IN: 0.15 },
+      coldStartProgressEmpty: false,
+    },
+    {
+      key: 'jw-cont-gng',
+      index: 11,
+      franchise: 'John Wick',
+      refPrefix: 'TCG',
+      property: {
+        id: 'anime-prop-jw-cont-gng',
+        slug: 'continental-gangtok',
+        name: 'The Continental Gangtok',
+        city: 'Gangtok',
+        state: 'Sikkim',
+        pincode: '737101',
+        address: '8 Gold Coin Lane, MG Marg',
+      },
+      tier: 'STARTER',
+      owner: WINSTON,
+      coOwners: [],
+      manager: CHARON, // Rule 7 — Charon also manages Continental Darjeeling (same owner).
+      housekeepers: [
+        { id: 'anime-user-continental-doctor', name: 'The Continental Doctor', phone: hkPhone(11, 1) },
+        { id: 'anime-user-continental-sommelier', name: 'The Continental Sommelier', phone: hkPhone(11, 2) },
+      ],
+      guests: mkGuests('TCG', 11, JW_GUESTS.slice(8, 16)),
+      reservationCount: 45,
+      roomTypes: [
+        { id: 'anime-rt-jw-cont-gng-std', name: 'Continental Room', maxOccupancy: 2, baseRate: '3700.00', floorRate: '3200.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-jw-cont-gng-dlx', name: 'Gold Coin Deluxe', maxOccupancy: 3, baseRate: '6600.00', floorRate: '5800.00', gstSlab: '18%', amenities: ['WiFi', 'Mountain View'] },
+      ],
+      rooms: mkRooms('jw-cont-gng', 4, 2, 0),
+      sourceMix: { DIRECT_BOOKING: 0.55, OTA: 0.3, WALK_IN: 0.15 },
+      coldStartProgressEmpty: true,
+    },
+    {
+      key: 'jw-cont-kal',
+      index: 12,
+      franchise: 'John Wick',
+      refPrefix: 'TCK',
+      property: {
+        id: 'anime-prop-jw-cont-kal',
+        slug: 'continental-kalimpong',
+        name: 'The Continental Kalimpong',
+        city: 'Kalimpong',
+        state: 'West Bengal',
+        pincode: '734305',
+        address: '6 Blood Oath Road, Kalimpong',
+      },
+      tier: 'TRIAL',
+      owner: MARQUIS,
+      coOwners: [WINSTON], // Rule 8 — co-owned; Winston co-owns all three Continentals.
+      manager: CASSIAN,
+      housekeepers: [
+        { id: 'anime-user-continental-bellhop', name: 'Continental Bellhop', phone: hkPhone(12, 1) },
+        { id: 'anime-user-continental-valet', name: 'Continental Valet', phone: hkPhone(12, 2) },
+      ],
+      guests: mkGuests('TCK', 12, JW_GUESTS.slice(16, 24)),
+      reservationCount: 28,
+      roomTypes: [
+        { id: 'anime-rt-jw-cont-kal-std', name: 'Marker Room', maxOccupancy: 2, baseRate: '3000.00', floorRate: '2600.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-jw-cont-kal-dlx', name: 'Blood Oath Suite', maxOccupancy: 3, baseRate: '5400.00', floorRate: '4800.00', gstSlab: '18%', amenities: ['WiFi', 'River View'] },
+      ],
+      rooms: mkRooms('jw-cont-kal', 3, 2, 0),
+      sourceMix: { DIRECT_BOOKING: 0.6, OTA: 0, WALK_IN: 0.4 },
+      coldStartProgressEmpty: true,
+    },
+    // ── The Matrix ─────────────────────────────────────────────────────────
+    {
+      key: 'mx-zion',
+      index: 13,
+      franchise: 'The Matrix',
+      refPrefix: 'ZNS',
+      property: {
+        id: 'anime-prop-mx-zion',
+        slug: 'zion-sanctuary',
+        name: 'Zion Sanctuary',
+        city: 'Gangtok',
+        state: 'Sikkim',
+        pincode: '737101',
+        address: '101 Temple Deck, MG Marg',
+      },
+      tier: 'GROWTH',
+      owner: MORPHEUS,
+      coOwners: [NIOBE], // Rule 8 — co-owned.
+      manager: TANK,
+      housekeepers: [
+        { id: 'anime-user-zee', name: 'Zee', phone: hkPhone(13, 1) },
+        { id: 'anime-user-charra', name: 'Charra', phone: hkPhone(13, 2) },
+      ],
+      guests: mkGuests('ZNS', 13, MX_GUESTS.slice(0, 8)),
+      reservationCount: 70,
+      roomTypes: [
+        { id: 'anime-rt-mx-zion-std', name: 'Operator Room', maxOccupancy: 2, baseRate: '5100.00', floorRate: '4500.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-mx-zion-dlx', name: 'Zion Deck Suite', maxOccupancy: 3, baseRate: '9200.00', floorRate: '8100.00', gstSlab: '18%', amenities: ['WiFi', 'City View'] },
+        { id: 'anime-rt-mx-zion-suite', name: 'Temple Penthouse', maxOccupancy: 4, baseRate: '15500.00', floorRate: '13700.00', gstSlab: '18%', amenities: ['WiFi', 'City View', 'Lounge'] },
+      ],
+      rooms: mkRooms('mx-zion', 4, 3, 2),
+      sourceMix: { DIRECT_BOOKING: 0.4, OTA: 0.45, WALK_IN: 0.15 },
+      coldStartProgressEmpty: false,
+    },
+    {
+      key: 'mx-neb',
+      index: 14,
+      franchise: 'The Matrix',
+      refPrefix: 'NEB',
+      property: {
+        id: 'anime-prop-mx-neb',
+        slug: 'nebuchadnezzar-lodge',
+        name: 'Nebuchadnezzar Lodge',
+        city: 'Kalimpong',
+        state: 'West Bengal',
+        pincode: '734306',
+        address: '2 Broadcast Depth, Deolo Hill',
+      },
+      tier: 'TRIAL',
+      owner: MORPHEUS,
+      coOwners: [],
+      manager: LINK,
+      housekeepers: [
+        { id: 'anime-user-ghost', name: 'Ghost', phone: hkPhone(14, 1) },
+        { id: 'anime-user-sparks', name: 'Sparks', phone: hkPhone(14, 2) },
+      ],
+      guests: mkGuests('NEB', 14, MX_GUESTS.slice(8, 16)),
+      reservationCount: 28,
+      roomTypes: [
+        { id: 'anime-rt-mx-neb-std', name: 'Crew Berth', maxOccupancy: 2, baseRate: '2900.00', floorRate: '2500.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-mx-neb-dlx', name: 'Construct Cabin', maxOccupancy: 3, baseRate: '5200.00', floorRate: '4600.00', gstSlab: '18%', amenities: ['WiFi', 'Forest View'] },
+      ],
+      rooms: mkRooms('mx-neb', 3, 2, 0),
+      sourceMix: { DIRECT_BOOKING: 0.65, OTA: 0, WALK_IN: 0.35 },
+      coldStartProgressEmpty: true,
     },
   ];
 }
@@ -1242,35 +1441,60 @@ async function fillUpDensity(prisma: PrismaClient, theme: ThemeDef): Promise<voi
 }
 
 // ─── GST Invoices ──────────────────────────────────────────────────────────
-// One Invoice per CLOSED folio. Most are PAID (B2C, no recipient GSTIN).
-// ~10% are B2B with a synthetic recipient GSTIN. CGST + SGST split 50/50.
+// One Invoice per CLOSED folio, each carrying InvoiceLine rows that mirror the
+// folio lines (one line per room-night plus any extra charge). Most invoices
+// are PAID (B2C, no recipient GSTIN); ~10% are B2B with a synthetic recipient
+// GSTIN. Tax on every line splits CGST + SGST 50/50, and the invoice header
+// totals are the sum of the lines so the two always reconcile.
 
 async function seedInvoices(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
   const propertyId = theme.property.id;
   const r = rng(`${propertyId}-invoices`);
   const supplierGstin = gstinForState(theme.property.state, theme.property.name.length);
 
+  // Deterministic folio order → stable `idx` → stable invoice/line IDs.
   const closedFolios = await prisma.folio.findMany({
     where: { propertyId, status: 'CLOSED' },
+    orderBy: { id: 'asc' },
   });
 
   let idx = 0;
   for (const folio of closedFolios) {
-    const [reservation, guest, lines] = await Promise.all([
+    const [reservation, guest, folioLines] = await Promise.all([
       prisma.reservation.findUnique({ where: { id: folio.reservationId } }),
       prisma.guest.findUnique({ where: { id: folio.guestId } }),
       prisma.folioLine.findMany({ where: { folioId: folio.id } }),
     ]);
-    if (!reservation || !guest) continue;
+    if (!reservation || !guest || folioLines.length === 0) continue;
     idx += 1;
     const checkIn = reservation.checkIn;
     const checkOut = reservation.checkOut;
     const nights = Math.max(1, Math.round((checkOut.getTime() - checkIn.getTime()) / DAY_MS));
-    const taxableValue = lines.reduce((acc, l) => acc + Number(l.amount), 0);
-    const taxTotal = lines.reduce((acc, l) => acc + Number(l.taxAmount), 0);
-    const cgst = +(taxTotal / 2).toFixed(2);
-    const sgst = +(taxTotal - cgst).toFixed(2);
-    const total = +(taxableValue + taxTotal).toFixed(2);
+
+    // One InvoiceLine per folio line. Sort by the stable folio-line ID so the
+    // line index — and therefore the InvoiceLine ID — is the same on re-runs.
+    const sortedLines = [...folioLines].sort((a, b) => a.id.localeCompare(b.id));
+    const invoiceLines = sortedLines.map((line) => {
+      const amount = Number(line.amount);
+      const taxAmount = Number(line.taxAmount);
+      const cgst = +(taxAmount / 2).toFixed(2);
+      const sgst = +(taxAmount - cgst).toFixed(2);
+      return {
+        description: line.description,
+        ratePerNight: amount,
+        gstSlab: line.gstSlab,
+        cgstAmount: cgst,
+        sgstAmount: sgst,
+        lineTotal: +(amount + taxAmount).toFixed(2),
+      };
+    });
+
+    // Header totals = sum of the lines.
+    const taxableValue = +invoiceLines.reduce((a, l) => a + l.ratePerNight, 0).toFixed(2);
+    const cgst = +invoiceLines.reduce((a, l) => a + l.cgstAmount, 0).toFixed(2);
+    const sgst = +invoiceLines.reduce((a, l) => a + l.sgstAmount, 0).toFixed(2);
+    const total = +invoiceLines.reduce((a, l) => a + l.lineTotal, 0).toFixed(2);
+
     const status = r() < 0.8 ? 'PAID' : 'ISSUED';
     const isB2B = r() < 0.1;
     const recipientGstin = isB2B ? gstinForState(theme.property.state, idx) : null;
@@ -1312,7 +1536,109 @@ async function seedInvoices(prisma: PrismaClient, theme: ThemeDef): Promise<void
         invoiceDate: checkOut,
       },
     });
+
+    // InvoiceLine rows — stable IDs keyed off the invoice so re-runs upsert in
+    // place. No discounts modelled: postDiscountAmount === ratePerNight.
+    for (const [n, line] of invoiceLines.entries()) {
+      const lineId = `${invoiceId}-line-${String(n + 1).padStart(2, '0')}`;
+      await prisma.invoiceLine.upsert({
+        where: { id: lineId },
+        update: {
+          description: line.description,
+          ratePerNight: line.ratePerNight.toFixed(2),
+          postDiscountAmount: line.ratePerNight.toFixed(2),
+          gstSlab: line.gstSlab,
+          cgstAmount: line.cgstAmount.toFixed(2),
+          sgstAmount: line.sgstAmount.toFixed(2),
+          lineTotal: line.lineTotal.toFixed(2),
+        },
+        create: {
+          id: lineId,
+          invoiceId,
+          propertyId,
+          description: line.description,
+          ratePerNight: line.ratePerNight.toFixed(2),
+          discountAmount: '0.00',
+          postDiscountAmount: line.ratePerNight.toFixed(2),
+          gstSlab: line.gstSlab,
+          cgstAmount: line.cgstAmount.toFixed(2),
+          sgstAmount: line.sgstAmount.toFixed(2),
+          lineTotal: line.lineTotal.toFixed(2),
+        },
+      });
+    }
   }
+}
+
+// ─── Room blocks ───────────────────────────────────────────────────────────
+// One active block per property — alternating MAINTENANCE / OUT_OF_ORDER —
+// covering a window around "now" so it shows as live in the room grid. The
+// blocked room's state is flipped to match the block type, mirroring the
+// transition createRoomBlock() performs when a block starts today.
+
+async function seedRoomBlocks(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
+  const propertyId = theme.property.id;
+  // Last room of the property — deterministic, and on larger properties it
+  // sits outside the 5-room housekeeping "dirty" cohort.
+  const room = theme.rooms[theme.rooms.length - 1];
+  if (!room) return;
+
+  const blockType = theme.index % 2 === 0 ? 'MAINTENANCE' : 'OUT_OF_ORDER';
+  const reason =
+    blockType === 'MAINTENANCE'
+      ? 'Bathroom plumbing repair'
+      : 'Water damage — awaiting restoration';
+
+  // Active window: started yesterday, runs five more days.
+  const startDate = dateOnly(new Date(NOW.getTime() - 1 * DAY_MS));
+  const endDate = dateOnly(new Date(NOW.getTime() + 5 * DAY_MS));
+  const blockId = `${theme.key}-block-01`;
+
+  await prisma.roomBlock.upsert({
+    where: { id: blockId },
+    update: { blockType, startDate, endDate, reason, deletedAt: null, deletedBy: null },
+    create: {
+      id: blockId,
+      propertyId,
+      roomId: room.id,
+      blockType,
+      startDate,
+      endDate,
+      reason,
+      createdBy: theme.manager.id,
+    },
+  });
+
+  // The block is live today — reflect it in the room's state.
+  await prisma.room.update({
+    where: { id: room.id },
+    data: { state: blockType },
+  });
+
+  // Matching audit-trail entry, as createRoomBlock() would write.
+  const blockAuditId = `${theme.key}-block-audit-01`;
+  await prisma.auditLog.upsert({
+    where: { id: blockAuditId },
+    update: {},
+    create: {
+      id: blockAuditId,
+      propertyId,
+      entityType: 'ROOM',
+      entityId: room.id,
+      action: 'ROOM_BLOCKED',
+      toState: blockType,
+      actorId: theme.manager.id,
+      actorRole: 'MANAGER',
+      metadata: {
+        blockId,
+        blockType,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        reason,
+      },
+      createdAt: new Date(NOW.getTime() - 1 * DAY_MS),
+    },
+  });
 }
 
 // ─── Audit logs ────────────────────────────────────────────────────────────
@@ -1655,25 +1981,29 @@ export async function seedAnimeProperties(prisma: PrismaClient): Promise<void> {
     await seedTheme(prisma, theme);
   }
 
-  // Post-pass: fill-up density, invoices, audit logs, housekeeping logs.
+  // Post-pass: fill-up density, invoices, audit logs, housekeeping logs, room
+  // blocks. seedRoomBlocks runs last so its room-state flip is not clobbered.
   for (const theme of themes) {
     await fillUpDensity(prisma, theme);
     await seedInvoices(prisma, theme);
     await seedAuditLogs(prisma, theme);
     await seedHousekeepingLogs(prisma, theme);
+    await seedRoomBlocks(prisma, theme);
   }
 
   // Counts summary.
   for (const theme of themes) {
-    const [rooms, reservations, folios, invoices, audits] = await Promise.all([
+    const [rooms, reservations, folios, invoices, invoiceLines, blocks, audits] = await Promise.all([
       prisma.room.count({ where: { propertyId: theme.property.id, deletedAt: null } }),
       prisma.reservation.count({ where: { propertyId: theme.property.id } }),
       prisma.folio.count({ where: { propertyId: theme.property.id } }),
       prisma.invoice.count({ where: { propertyId: theme.property.id } }),
+      prisma.invoiceLine.count({ where: { propertyId: theme.property.id } }),
+      prisma.roomBlock.count({ where: { propertyId: theme.property.id, deletedAt: null } }),
       prisma.auditLog.count({ where: { propertyId: theme.property.id } }),
     ]);
     console.log(
-      `[seed:anime]   ${theme.property.slug}: rooms=${rooms} reservations=${reservations} folios=${folios} invoices=${invoices} audits=${audits}`,
+      `[seed:anime]   ${theme.property.slug}: rooms=${rooms} reservations=${reservations} folios=${folios} invoices=${invoices} invoiceLines=${invoiceLines} blocks=${blocks} audits=${audits}`,
     );
   }
 
