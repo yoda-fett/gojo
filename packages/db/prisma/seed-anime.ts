@@ -1,22 +1,32 @@
-// Themed demo seed — seven anime-flavoured properties across three franchises.
+// Themed demo seed — nine anime-flavoured properties across three franchises.
 // Idempotent: re-running upserts records by stable string IDs (no drops).
 //
-// Mapping:
-//   One Piece    — Thousand Sunny Resort     · GROWTH  (Darjeeling)
-//                — Going Merry Lodge          · STARTER (Gangtok)
-//                — Baratie Floating Stay      · TRIAL   (Kalimpong)
-//   Demon Slayer — Butterfly Mansion Inn      · STARTER (Gangtok)
-//                — Wisteria Estate            · GROWTH  (Darjeeling)
-//   Naruto       — Konoha Leaf Lodge          · TRIAL   (Kalimpong)
-//                — Sand Village Inn           · STARTER (Darjeeling)
+// Layout (9 properties · 3 franchises · 3 tiers · 3 cities):
+//   One Piece    — Thousand Sunny Resort   · GROWTH  · Darjeeling · co-owned
+//                — Going Merry Lodge        · STARTER · Gangtok
+//                — Baratie Floating Stay    · TRIAL   · Kalimpong  · coldStart {}
+//   Demon Slayer — Butterfly Mansion Inn    · STARTER · Gangtok
+//                — Wisteria Estate          · GROWTH  · Darjeeling · co-owned
+//                — Mugen Train Inn          · TRIAL   · Kalimpong  · coldStart {}
+//   Naruto       — Konoha Leaf Lodge        · TRIAL   · Kalimpong  · coldStart {}
+//                — Sand Village Inn         · STARTER · Darjeeling
+//                — Hokage Tower Hotel       · GROWTH  · Gangtok    · co-owned
 //
-// Owners hold multiple properties (Luffy → all OP, Tanjiro → both DS, Naruto →
-// both NA). Manager Nico Robin is cross-property (Sunny + Going Merry).
-// Generates ~1 year of reservations plus fill-up pass to guarantee ≥4 arrivals
-// and ≥4 departures per ISO week across May + June 2026 per property. Adds GST
-// invoices, audit logs, and housekeeping action items.
+// Rules honoured:
+//   · 3 multi-property owners — Luffy / Tanjiro / Naruto each own 3 properties.
+//   · 3 co-owned properties — Thousand Sunny (+Shanks), Wisteria (+Rengoku),
+//     Hokage Tower (+Kakashi) each carry two OWNER access rows.
+//   · 1 MANAGER per property; Nico Robin manages two of Luffy's properties
+//     (Thousand Sunny + Going Merry).
+//   · Every property: ~1 year of reservations + a fill-up pass guaranteeing
+//     ≥4 arrivals AND ≥4 departures per ISO week across May + June 2026
+//     (current + coming month), GST invoices, audit logs, housekeeping tasks.
+//   · No PINs seeded — OTP login only.
+//   · 3 properties carry `coldStartProgress = {}`; all property data is still
+//     fully populated. `coldStartCompletedAt` on every property predates the
+//     first guest entry.
 
-import type { PrismaClient } from '../src/generated/client/index.js';
+import type { Prisma, PrismaClient } from '../src/generated/client/index.js';
 
 // Deterministic PRNG (mulberry32). Same propertyId → same numbers across runs.
 function rng(seedStr: string) {
@@ -36,17 +46,48 @@ function rng(seedStr: string) {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const NOW = new Date('2026-05-17T00:00:00.000Z');
-// Reservation window: 1 year back, 2 months forward.
+// "Now" for the seed — aligned with the demo's current calendar month.
+const NOW = new Date('2026-05-21T00:00:00.000Z');
+// Reservation window: 1 year back, 2 months forward (covers May + June 2026).
 const PAST_DAYS = 365;
 const FUTURE_DAYS = 60;
 // Future bookings — keep some weeks empty at random by skipping placements.
 const FUTURE_SKIP_PROBABILITY = 0.4;
+// Onboarding completed well before the first guest entry (rule 18).
+const COLD_START_COMPLETED_AT = new Date(NOW.getTime() - 400 * DAY_MS);
+// Guests consented after onboarding but before the booking window opens.
+const GUEST_CONSENT_AT = new Date(NOW.getTime() - 370 * DAY_MS);
 
 type CharacterDef = { id: string; name: string; phone: string };
 
+// ─── Cast ──────────────────────────────────────────────────────────────────
+// Three multi-property owners — one per franchise.
+const LUFFY: CharacterDef = { id: 'anime-user-luffy', name: 'Monkey D. Luffy', phone: '+919000010001' };
+const TANJIRO: CharacterDef = { id: 'anime-user-tanjiro', name: 'Tanjiro Kamado', phone: '+919000010002' };
+const NARUTO: CharacterDef = { id: 'anime-user-naruto', name: 'Naruto Uzumaki', phone: '+919000010003' };
+
+// Co-owners — each shares ownership of exactly one property.
+const SHANKS: CharacterDef = { id: 'anime-user-shanks', name: 'Shanks', phone: '+919000020001' };
+const RENGOKU: CharacterDef = { id: 'anime-user-rengoku', name: 'Kyojuro Rengoku', phone: '+919000020002' };
+const KAKASHI: CharacterDef = { id: 'anime-user-kakashi', name: 'Kakashi Hatake', phone: '+919000020003' };
+
+// Managers — one per property. Robin covers two of Luffy's properties.
+const ROBIN: CharacterDef = { id: 'anime-user-robin', name: 'Nico Robin', phone: '+919000030001' };
+const SANJI: CharacterDef = { id: 'anime-user-sanji', name: 'Vinsmoke Sanji', phone: '+919000030002' };
+const SHINOBU: CharacterDef = { id: 'anime-user-shinobu', name: 'Shinobu Kocho', phone: '+919000030003' };
+const GIYU: CharacterDef = { id: 'anime-user-giyu', name: 'Giyu Tomioka', phone: '+919000030004' };
+const TENGEN: CharacterDef = { id: 'anime-user-tengen', name: 'Tengen Uzui', phone: '+919000030005' };
+const SAKURA: CharacterDef = { id: 'anime-user-sakura', name: 'Sakura Haruno', phone: '+919000030006' };
+const GAARA: CharacterDef = { id: 'anime-user-gaara', name: 'Gaara', phone: '+919000030007' };
+const SHIKAMARU: CharacterDef = { id: 'anime-user-shikamaru', name: 'Shikamaru Nara', phone: '+919000030008' };
+
+type RoomTypeKey = 'std' | 'dlx' | 'suite';
+
 interface ThemeDef {
   key: string;
+  index: number; // 1-based property index — used for phone derivation
+  franchise: 'One Piece' | 'Demon Slayer' | 'Naruto';
+  refPrefix: string; // booking-ref / invoice-number prefix
   property: {
     id: string;
     slug: string;
@@ -58,6 +99,7 @@ interface ThemeDef {
   };
   tier: 'TRIAL' | 'STARTER' | 'GROWTH';
   owner: CharacterDef;
+  coOwners: CharacterDef[];
   manager: CharacterDef;
   housekeepers: CharacterDef[];
   guests: { code: string; name: string; phone: string }[];
@@ -71,17 +113,72 @@ interface ThemeDef {
     gstSlab: string;
     amenities: string[];
   }[];
-  rooms: { id: string; number: string; floor: number; roomTypeKey: 'std' | 'dlx' | 'suite' }[];
-  // Source mix as cumulative weights summing to 1.
+  rooms: { id: string; number: string; floor: number; roomTypeKey: RoomTypeKey }[];
+  // Source mix as weights summing to 1.
   sourceMix: { DIRECT_BOOKING: number; OTA: number; WALK_IN: number };
+  // Rule 17 — these properties carry `coldStartProgress = {}`.
+  coldStartProgressEmpty: boolean;
 }
+
+// Guest phone: +91 9700 PP GG 00  (PP = property index, GG = guest index).
+function guestPhone(propIdx: number, gIdx: number): string {
+  return `+919700${String(propIdx).padStart(2, '0')}${String(gIdx).padStart(2, '0')}00`;
+}
+
+// Housekeeper phone: +91 900004 PP NN.
+function hkPhone(propIdx: number, hkIdx: number): string {
+  return `+91900004${String(propIdx).padStart(2, '0')}${String(hkIdx).padStart(2, '0')}`;
+}
+
+function mkGuests(prefix: string, propIdx: number, names: string[]) {
+  return names.map((name, i) => ({
+    code: `${prefix}-G${String(i + 1).padStart(2, '0')}`,
+    name,
+    phone: guestPhone(propIdx, i + 1),
+  }));
+}
+
+function mkRooms(key: string, std: number, dlx: number, suite: number) {
+  const rooms: ThemeDef['rooms'] = [];
+  const push = (floor: number, count: number, roomTypeKey: RoomTypeKey) => {
+    for (let i = 1; i <= count; i++) {
+      const number = `${floor}${String(i).padStart(2, '0')}`;
+      rooms.push({ id: `anime-room-${key}-${number}`, number, floor, roomTypeKey });
+    }
+  };
+  push(1, std, 'std');
+  push(2, dlx, 'dlx');
+  if (suite > 0) push(3, suite, 'suite');
+  return rooms;
+}
+
+// 24-name guest pools — sliced 8/property across each franchise's 3 properties.
+const OP_GUESTS = [
+  'Roronoa Zoro', 'Nefertari Vivi', 'Portgas D. Ace', 'Trafalgar Law', 'Boa Hancock', 'Dracule Mihawk', 'Jinbei', 'Brook',
+  'Bartolomeo', 'Cavendish', 'Koby', 'Smoker', 'Tashigi', 'Marco', 'Charlotte Katakuri', 'Eustass Kid',
+  'Killer', 'Capone Bege', 'Jewelry Bonney', 'Basil Hawkins', 'X Drake', 'Vinsmoke Reiju', 'Rob Lucci', 'Kuzan Aokiji',
+];
+const DS_GUESTS = [
+  'Nezuko Kamado', 'Kanao Tsuyuri', 'Genya Shinazugawa', 'Mitsuri Kanroji', 'Muichiro Tokito', 'Sanemi Shinazugawa', 'Obanai Iguro', 'Gyomei Himejima',
+  'Tamayo Healer', 'Yushiro', 'Kagaya Ubuyashiki', 'Kanae Kocho', 'Sakonji Urokodaki', 'Sabito', 'Makomo', 'Hotaru Haganezuka',
+  'Kaigaku', 'Suma', 'Makio', 'Hinatsuru', 'Murata', 'Amane Ubuyashiki', 'Kanata Ubuyashiki', 'Toko Agatsuma',
+];
+const NA_GUESTS = [
+  'Sasuke Uchiha', 'Hinata Hyuga', 'Neji Hyuga', 'Tenten', 'Kiba Inuzuka', 'Shino Aburame', 'Jiraiya', 'Tsunade',
+  'Itachi Uchiha', 'Minato Namikaze', 'Kushina Uzumaki', 'Asuma Sarutobi', 'Kurenai Yuhi', 'Might Guy', 'Iruka Umino', 'Hashirama Senju',
+  'Tobirama Senju', 'Hiruzen Sarutobi', 'Obito Uchiha', 'Rin Nohara', 'Killer Bee', 'Yamato Tenzo', 'Sai Yamanaka', 'Anko Mitarashi',
+];
 
 function buildThemes(): ThemeDef[] {
   return [
+    // ── One Piece ──────────────────────────────────────────────────────────
     {
-      key: 'one-piece',
+      key: 'op-sunny',
+      index: 1,
+      franchise: 'One Piece',
+      refPrefix: 'TSR',
       property: {
-        id: 'anime-prop-onepiece',
+        id: 'anime-prop-op-sunny',
         slug: 'thousand-sunny-resort',
         name: 'Thousand Sunny Resort',
         city: 'Darjeeling',
@@ -90,48 +187,32 @@ function buildThemes(): ThemeDef[] {
         address: '1 Grand Line Avenue, Chowrasta',
       },
       tier: 'GROWTH',
-      owner: { id: 'anime-user-luffy', name: 'Monkey D. Luffy', phone: '+919000110001' },
-      manager: { id: 'anime-user-robin', name: 'Nico Robin', phone: '+919000110002' },
+      owner: LUFFY,
+      coOwners: [SHANKS],
+      manager: ROBIN,
       housekeepers: [
-        { id: 'anime-user-nami', name: 'Nami', phone: '+919000110003' },
-        { id: 'anime-user-usopp', name: 'Usopp', phone: '+919000110004' },
-        { id: 'anime-user-chopper', name: 'Tony Tony Chopper', phone: '+919000110005' },
+        { id: 'anime-user-nami', name: 'Nami', phone: hkPhone(1, 1) },
+        { id: 'anime-user-usopp', name: 'Usopp', phone: hkPhone(1, 2) },
+        { id: 'anime-user-chopper', name: 'Tony Tony Chopper', phone: hkPhone(1, 3) },
       ],
-      guests: [
-        ['OP-G01', 'Roronoa Zoro', '+919000119001'],
-        ['OP-G02', 'Vinsmoke Sanji', '+919000119002'],
-        ['OP-G03', 'Nefertari Vivi', '+919000119003'],
-        ['OP-G04', 'Portgas D. Ace', '+919000119004'],
-        ['OP-G05', 'Trafalgar Law', '+919000119005'],
-        ['OP-G06', 'Boa Hancock', '+919000119006'],
-        ['OP-G07', 'Shanks Akagami', '+919000119007'],
-        ['OP-G08', 'Smoker Tashigi', '+919000119008'],
-        ['OP-G09', 'Bartholomew Kuma', '+919000119009'],
-        ['OP-G10', 'Dracule Mihawk', '+919000119010'],
-      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
-      reservationCount: 100,
+      guests: mkGuests('TSR', 1, OP_GUESTS.slice(0, 8)),
+      reservationCount: 70,
       roomTypes: [
-        { id: 'anime-rt-op-std', name: 'Crew Cabin', maxOccupancy: 2, baseRate: '5200.00', floorRate: '4500.00', gstSlab: '12%', amenities: ['WiFi'] },
-        { id: 'anime-rt-op-dlx', name: 'Captain Suite', maxOccupancy: 3, baseRate: '9800.00', floorRate: '8800.00', gstSlab: '18%', amenities: ['WiFi', 'Sea View'] },
-        { id: 'anime-rt-op-suite', name: 'Mast Penthouse', maxOccupancy: 4, baseRate: '15500.00', floorRate: '14000.00', gstSlab: '18%', amenities: ['WiFi', 'Sea View', 'Lounge'] },
+        { id: 'anime-rt-op-sunny-std', name: 'Crew Cabin', maxOccupancy: 2, baseRate: '5200.00', floorRate: '4500.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-op-sunny-dlx', name: 'Captain Suite', maxOccupancy: 3, baseRate: '9800.00', floorRate: '8600.00', gstSlab: '18%', amenities: ['WiFi', 'Valley View'] },
+        { id: 'anime-rt-op-sunny-suite', name: 'Mast Penthouse', maxOccupancy: 4, baseRate: '15500.00', floorRate: '13800.00', gstSlab: '18%', amenities: ['WiFi', 'Valley View', 'Lounge'] },
       ],
-      rooms: [
-        { id: 'anime-room-op-101', number: '101', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-op-102', number: '102', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-op-103', number: '103', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-op-104', number: '104', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-op-201', number: '201', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-op-202', number: '202', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-op-203', number: '203', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-op-301', number: '301', floor: 3, roomTypeKey: 'suite' },
-        { id: 'anime-room-op-302', number: '302', floor: 3, roomTypeKey: 'suite' },
-      ],
+      rooms: mkRooms('op-sunny', 4, 3, 2),
       sourceMix: { DIRECT_BOOKING: 0.35, OTA: 0.5, WALK_IN: 0.15 },
+      coldStartProgressEmpty: false,
     },
     {
-      key: 'one-piece-merry',
+      key: 'op-merry',
+      index: 2,
+      franchise: 'One Piece',
+      refPrefix: 'GML',
       property: {
-        id: 'anime-prop-op-going-merry',
+        id: 'anime-prop-op-merry',
         slug: 'going-merry-lodge',
         name: 'Going Merry Lodge',
         city: 'Gangtok',
@@ -140,40 +221,28 @@ function buildThemes(): ThemeDef[] {
         address: '12 MG Marg, Gangtok',
       },
       tier: 'STARTER',
-      owner: { id: 'anime-user-luffy', name: 'Monkey D. Luffy', phone: '+919000110001' },
-      // Robin pulls double duty — she also manages Thousand Sunny.
-      manager: { id: 'anime-user-robin', name: 'Nico Robin', phone: '+919000110002' },
+      owner: LUFFY,
+      coOwners: [],
+      manager: ROBIN, // Rule 7 — Robin also manages Thousand Sunny (same owner).
       housekeepers: [
-        { id: 'anime-user-merry-hk1', name: 'Carrot Mink', phone: '+919000140003' },
-        { id: 'anime-user-merry-hk2', name: 'Pedro Jaguar', phone: '+919000140004' },
+        { id: 'anime-user-carrot', name: 'Carrot Mink', phone: hkPhone(2, 1) },
+        { id: 'anime-user-pedro', name: 'Pedro Jaguar', phone: hkPhone(2, 2) },
       ],
-      guests: [
-        ['MR-G01', 'Bartolomeo Cannibal', '+919000149001'],
-        ['MR-G02', 'Cavendish White Horse', '+919000149002'],
-        ['MR-G03', 'Ideo Boxer', '+919000149003'],
-        ['MR-G04', 'Leo Tontatta', '+919000149004'],
-        ['MR-G05', 'Hajrudin Giant', '+919000149005'],
-        ['MR-G06', 'Sai Happo', '+919000149006'],
-        ['MR-G07', 'Orlumbus Yonta', '+919000149007'],
-      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
-      reservationCount: 50,
+      guests: mkGuests('GML', 2, OP_GUESTS.slice(8, 16)),
+      reservationCount: 45,
       roomTypes: [
-        { id: 'anime-rt-merry-std', name: 'Galley Room', maxOccupancy: 2, baseRate: '3600.00', floorRate: '3100.00', gstSlab: '12%', amenities: ['WiFi'] },
-        { id: 'anime-rt-merry-dlx', name: 'Helmsman Deluxe', maxOccupancy: 3, baseRate: '6400.00', floorRate: '5600.00', gstSlab: '18%', amenities: ['WiFi', 'Mountain View'] },
-        { id: 'anime-rt-merry-suite', name: 'Figurehead Suite', maxOccupancy: 4, baseRate: '11800.00', floorRate: '10500.00', gstSlab: '18%', amenities: ['WiFi', 'Mountain View', 'Lounge'] },
+        { id: 'anime-rt-op-merry-std', name: 'Galley Room', maxOccupancy: 2, baseRate: '3600.00', floorRate: '3100.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-op-merry-dlx', name: 'Helmsman Deluxe', maxOccupancy: 3, baseRate: '6400.00', floorRate: '5600.00', gstSlab: '18%', amenities: ['WiFi', 'Mountain View'] },
       ],
-      rooms: [
-        { id: 'anime-room-merry-101', number: '101', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-merry-102', number: '102', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-merry-103', number: '103', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-merry-201', number: '201', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-merry-202', number: '202', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-merry-301', number: '301', floor: 3, roomTypeKey: 'suite' },
-      ],
+      rooms: mkRooms('op-merry', 4, 2, 0),
       sourceMix: { DIRECT_BOOKING: 0.55, OTA: 0.3, WALK_IN: 0.15 },
+      coldStartProgressEmpty: false,
     },
     {
-      key: 'one-piece-baratie',
+      key: 'op-baratie',
+      index: 3,
+      franchise: 'One Piece',
+      refPrefix: 'BFS',
       property: {
         id: 'anime-prop-op-baratie',
         slug: 'baratie-floating-stay',
@@ -184,37 +253,31 @@ function buildThemes(): ThemeDef[] {
         address: '9 Rishi Road, Kalimpong',
       },
       tier: 'TRIAL',
-      owner: { id: 'anime-user-luffy', name: 'Monkey D. Luffy', phone: '+919000110001' },
-      manager: { id: 'anime-user-sanji', name: 'Vinsmoke Sanji', phone: '+919000150002' },
+      owner: LUFFY,
+      coOwners: [],
+      manager: SANJI,
       housekeepers: [
-        { id: 'anime-user-baratie-hk1', name: 'Patty Pastry', phone: '+919000150003' },
-        { id: 'anime-user-baratie-hk2', name: 'Carne Cleaver', phone: '+919000150004' },
+        { id: 'anime-user-patty', name: 'Patty Pastry', phone: hkPhone(3, 1) },
+        { id: 'anime-user-carne', name: 'Carne Cleaver', phone: hkPhone(3, 2) },
       ],
-      guests: [
-        ['BR-G01', 'Zeff Red Leg', '+919000159001'],
-        ['BR-G02', 'Gin Iron Mace', '+919000159002'],
-        ['BR-G03', 'Krieg Don', '+919000159003'],
-        ['BR-G04', 'Pearl Iron Wall', '+919000159004'],
-        ['BR-G05', 'Mihawk Hawkeye', '+919000159005'],
-      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
-      reservationCount: 30,
+      guests: mkGuests('BFS', 3, OP_GUESTS.slice(16, 24)),
+      reservationCount: 28,
       roomTypes: [
-        { id: 'anime-rt-baratie-std', name: 'Galley Cabin', maxOccupancy: 2, baseRate: '2900.00', floorRate: '2500.00', gstSlab: '12%', amenities: ['WiFi'] },
-        { id: 'anime-rt-baratie-dlx', name: 'Sous Chef Room', maxOccupancy: 3, baseRate: '5200.00', floorRate: '4600.00', gstSlab: '18%', amenities: ['WiFi', 'River View'] },
+        { id: 'anime-rt-op-baratie-std', name: 'Galley Cabin', maxOccupancy: 2, baseRate: '2900.00', floorRate: '2500.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-op-baratie-dlx', name: 'Sous Chef Room', maxOccupancy: 3, baseRate: '5200.00', floorRate: '4600.00', gstSlab: '18%', amenities: ['WiFi', 'River View'] },
       ],
-      rooms: [
-        { id: 'anime-room-baratie-101', number: '101', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-baratie-102', number: '102', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-baratie-103', number: '103', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-baratie-201', number: '201', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-baratie-202', number: '202', floor: 2, roomTypeKey: 'dlx' },
-      ],
+      rooms: mkRooms('op-baratie', 3, 2, 0),
       sourceMix: { DIRECT_BOOKING: 0.6, OTA: 0, WALK_IN: 0.4 },
+      coldStartProgressEmpty: true,
     },
+    // ── Demon Slayer ───────────────────────────────────────────────────────
     {
-      key: 'demon-slayer',
+      key: 'ds-butterfly',
+      index: 4,
+      franchise: 'Demon Slayer',
+      refPrefix: 'BMI',
       property: {
-        id: 'anime-prop-demonslayer',
+        id: 'anime-prop-ds-butterfly',
         slug: 'butterfly-mansion-inn',
         name: 'Butterfly Mansion Inn',
         city: 'Gangtok',
@@ -223,39 +286,28 @@ function buildThemes(): ThemeDef[] {
         address: '7 Wisteria Lane, MG Marg',
       },
       tier: 'STARTER',
-      owner: { id: 'anime-user-tanjiro', name: 'Tanjiro Kamado', phone: '+919000220001' },
-      manager: { id: 'anime-user-shinobu', name: 'Shinobu Kocho', phone: '+919000220002' },
+      owner: TANJIRO,
+      coOwners: [],
+      manager: SHINOBU,
       housekeepers: [
-        { id: 'anime-user-zenitsu', name: 'Zenitsu Agatsuma', phone: '+919000220003' },
-        { id: 'anime-user-inosuke', name: 'Inosuke Hashibira', phone: '+919000220004' },
+        { id: 'anime-user-zenitsu', name: 'Zenitsu Agatsuma', phone: hkPhone(4, 1) },
+        { id: 'anime-user-inosuke', name: 'Inosuke Hashibira', phone: hkPhone(4, 2) },
       ],
-      guests: [
-        ['DS-G01', 'Nezuko Kamado', '+919000229001'],
-        ['DS-G02', 'Giyu Tomioka', '+919000229002'],
-        ['DS-G03', 'Kyojuro Rengoku', '+919000229003'],
-        ['DS-G04', 'Tengen Uzui', '+919000229004'],
-        ['DS-G05', 'Mitsuri Kanroji', '+919000229005'],
-        ['DS-G06', 'Muichiro Tokito', '+919000229006'],
-        ['DS-G07', 'Sanemi Shinazugawa', '+919000229007'],
-        ['DS-G08', 'Obanai Iguro', '+919000229008'],
-      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
-      reservationCount: 60,
+      guests: mkGuests('BMI', 4, DS_GUESTS.slice(0, 8)),
+      reservationCount: 45,
       roomTypes: [
-        { id: 'anime-rt-ds-std', name: 'Standard', maxOccupancy: 2, baseRate: '3800.00', floorRate: '3200.00', gstSlab: '12%', amenities: ['WiFi'] },
-        { id: 'anime-rt-ds-dlx', name: 'Garden View', maxOccupancy: 3, baseRate: '6800.00', floorRate: '6000.00', gstSlab: '18%', amenities: ['WiFi', 'Garden View'] },
+        { id: 'anime-rt-ds-butterfly-std', name: 'Standard Room', maxOccupancy: 2, baseRate: '3800.00', floorRate: '3200.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-ds-butterfly-dlx', name: 'Garden View', maxOccupancy: 3, baseRate: '6800.00', floorRate: '6000.00', gstSlab: '18%', amenities: ['WiFi', 'Garden View'] },
       ],
-      rooms: [
-        { id: 'anime-room-ds-101', number: '101', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-ds-102', number: '102', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-ds-103', number: '103', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-ds-201', number: '201', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-ds-202', number: '202', floor: 2, roomTypeKey: 'dlx' },
-      ],
-      // STARTER has no OTA channels enabled — direct + walk-in only.
-      sourceMix: { DIRECT_BOOKING: 0.65, OTA: 0, WALK_IN: 0.35 },
+      rooms: mkRooms('ds-butterfly', 4, 2, 0),
+      sourceMix: { DIRECT_BOOKING: 0.6, OTA: 0.25, WALK_IN: 0.15 },
+      coldStartProgressEmpty: false,
     },
     {
-      key: 'demon-slayer-wisteria',
+      key: 'ds-wisteria',
+      index: 5,
+      franchise: 'Demon Slayer',
+      refPrefix: 'WSE',
       property: {
         id: 'anime-prop-ds-wisteria',
         slug: 'wisteria-estate',
@@ -266,44 +318,64 @@ function buildThemes(): ThemeDef[] {
         address: '22 Mall Road, Darjeeling',
       },
       tier: 'GROWTH',
-      owner: { id: 'anime-user-tanjiro', name: 'Tanjiro Kamado', phone: '+919000220001' },
-      manager: { id: 'anime-user-giyu', name: 'Giyu Tomioka', phone: '+919000240002' },
+      owner: TANJIRO,
+      coOwners: [RENGOKU],
+      manager: GIYU,
       housekeepers: [
-        { id: 'anime-user-wisteria-hk1', name: 'Aoi Kanzaki', phone: '+919000240003' },
-        { id: 'anime-user-wisteria-hk2', name: 'Kiyo Terauchi', phone: '+919000240004' },
+        { id: 'anime-user-aoi', name: 'Aoi Kanzaki', phone: hkPhone(5, 1) },
+        { id: 'anime-user-kiyo', name: 'Kiyo Terauchi', phone: hkPhone(5, 2) },
       ],
-      guests: [
-        ['WS-G01', 'Genya Shinazugawa', '+919000249001'],
-        ['WS-G02', 'Kanao Tsuyuri', '+919000249002'],
-        ['WS-G03', 'Yushiro Vampire', '+919000249003'],
-        ['WS-G04', 'Tamayo Healer', '+919000249004'],
-        ['WS-G05', 'Murata Slayer', '+919000249005'],
-        ['WS-G06', 'Goto Kakushi', '+919000249006'],
-        ['WS-G07', 'Sumi Nakahara', '+919000249007'],
-        ['WS-G08', 'Naho Takada', '+919000249008'],
-      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
-      reservationCount: 90,
+      guests: mkGuests('WSE', 5, DS_GUESTS.slice(8, 16)),
+      reservationCount: 70,
       roomTypes: [
-        { id: 'anime-rt-wisteria-std', name: 'Pillar Room', maxOccupancy: 2, baseRate: '4800.00', floorRate: '4200.00', gstSlab: '12%', amenities: ['WiFi'] },
-        { id: 'anime-rt-wisteria-dlx', name: 'Garden Suite', maxOccupancy: 3, baseRate: '8400.00', floorRate: '7500.00', gstSlab: '18%', amenities: ['WiFi', 'Garden View'] },
-        { id: 'anime-rt-wisteria-suite', name: 'Hashira Penthouse', maxOccupancy: 4, baseRate: '14500.00', floorRate: '13000.00', gstSlab: '18%', amenities: ['WiFi', 'Garden View', 'Lounge'] },
+        { id: 'anime-rt-ds-wisteria-std', name: 'Pillar Room', maxOccupancy: 2, baseRate: '4800.00', floorRate: '4200.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-ds-wisteria-dlx', name: 'Garden Suite', maxOccupancy: 3, baseRate: '8400.00', floorRate: '7400.00', gstSlab: '18%', amenities: ['WiFi', 'Garden View'] },
+        { id: 'anime-rt-ds-wisteria-suite', name: 'Hashira Penthouse', maxOccupancy: 4, baseRate: '14500.00', floorRate: '12800.00', gstSlab: '18%', amenities: ['WiFi', 'Garden View', 'Lounge'] },
       ],
-      rooms: [
-        { id: 'anime-room-wisteria-101', number: '101', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-wisteria-102', number: '102', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-wisteria-103', number: '103', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-wisteria-201', number: '201', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-wisteria-202', number: '202', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-wisteria-203', number: '203', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-wisteria-301', number: '301', floor: 3, roomTypeKey: 'suite' },
-        { id: 'anime-room-wisteria-302', number: '302', floor: 3, roomTypeKey: 'suite' },
-      ],
+      rooms: mkRooms('ds-wisteria', 3, 3, 2),
       sourceMix: { DIRECT_BOOKING: 0.4, OTA: 0.45, WALK_IN: 0.15 },
+      coldStartProgressEmpty: false,
     },
     {
-      key: 'naruto',
+      key: 'ds-mugen',
+      index: 6,
+      franchise: 'Demon Slayer',
+      refPrefix: 'MTI',
       property: {
-        id: 'anime-prop-naruto',
+        id: 'anime-prop-ds-mugen',
+        slug: 'mugen-train-inn',
+        name: 'Mugen Train Inn',
+        city: 'Kalimpong',
+        state: 'West Bengal',
+        pincode: '734301',
+        address: '3 Deolo Hill Road, Kalimpong',
+      },
+      tier: 'TRIAL',
+      owner: TANJIRO,
+      coOwners: [],
+      manager: TENGEN,
+      housekeepers: [
+        { id: 'anime-user-senjuro', name: 'Senjuro Rengoku', phone: hkPhone(6, 1) },
+        { id: 'anime-user-goto', name: 'Goto Kakushi', phone: hkPhone(6, 2) },
+      ],
+      guests: mkGuests('MTI', 6, DS_GUESTS.slice(16, 24)),
+      reservationCount: 28,
+      roomTypes: [
+        { id: 'anime-rt-ds-mugen-std', name: 'Sleeper Cabin', maxOccupancy: 2, baseRate: '3100.00', floorRate: '2700.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-ds-mugen-dlx', name: 'First Class Berth', maxOccupancy: 3, baseRate: '5600.00', floorRate: '4900.00', gstSlab: '18%', amenities: ['WiFi', 'Forest View'] },
+      ],
+      rooms: mkRooms('ds-mugen', 3, 2, 0),
+      sourceMix: { DIRECT_BOOKING: 0.65, OTA: 0, WALK_IN: 0.35 },
+      coldStartProgressEmpty: true,
+    },
+    // ── Naruto ─────────────────────────────────────────────────────────────
+    {
+      key: 'na-konoha',
+      index: 7,
+      franchise: 'Naruto',
+      refPrefix: 'KLL',
+      property: {
+        id: 'anime-prop-na-konoha',
         slug: 'konoha-leaf-lodge',
         name: 'Konoha Leaf Lodge',
         city: 'Kalimpong',
@@ -312,36 +384,30 @@ function buildThemes(): ThemeDef[] {
         address: '4 Hokage Rock Trail, Deolo Hill',
       },
       tier: 'TRIAL',
-      owner: { id: 'anime-user-naruto', name: 'Naruto Uzumaki', phone: '+919000330001' },
-      manager: { id: 'anime-user-sakura', name: 'Sakura Haruno', phone: '+919000330002' },
+      owner: NARUTO,
+      coOwners: [],
+      manager: SAKURA,
       housekeepers: [
-        { id: 'anime-user-rocklee', name: 'Rock Lee', phone: '+919000330003' },
+        { id: 'anime-user-rocklee', name: 'Rock Lee', phone: hkPhone(7, 1) },
+        { id: 'anime-user-konohamaru', name: 'Konohamaru Sarutobi', phone: hkPhone(7, 2) },
       ],
-      guests: [
-        ['NA-G01', 'Sasuke Uchiha', '+919000339001'],
-        ['NA-G02', 'Kakashi Hatake', '+919000339002'],
-        ['NA-G03', 'Hinata Hyuga', '+919000339003'],
-        ['NA-G04', 'Shikamaru Nara', '+919000339004'],
-        ['NA-G05', 'Gaara of the Sand', '+919000339005'],
-      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
-      reservationCount: 25,
+      guests: mkGuests('KLL', 7, NA_GUESTS.slice(0, 8)),
+      reservationCount: 28,
       roomTypes: [
-        { id: 'anime-rt-na-std', name: 'Genin Room', maxOccupancy: 2, baseRate: '2800.00', floorRate: '2400.00', gstSlab: '12%', amenities: ['WiFi'] },
-        { id: 'anime-rt-na-dlx', name: 'Chunin Suite', maxOccupancy: 3, baseRate: '4800.00', floorRate: '4200.00', gstSlab: '18%', amenities: ['WiFi', 'Forest View'] },
+        { id: 'anime-rt-na-konoha-std', name: 'Genin Room', maxOccupancy: 2, baseRate: '2800.00', floorRate: '2400.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-na-konoha-dlx', name: 'Chunin Suite', maxOccupancy: 3, baseRate: '4800.00', floorRate: '4200.00', gstSlab: '18%', amenities: ['WiFi', 'Forest View'] },
       ],
-      rooms: [
-        { id: 'anime-room-na-101', number: '101', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-na-102', number: '102', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-na-103', number: '103', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-na-201', number: '201', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-na-202', number: '202', floor: 2, roomTypeKey: 'dlx' },
-      ],
+      rooms: mkRooms('na-konoha', 3, 2, 0),
       sourceMix: { DIRECT_BOOKING: 0.55, OTA: 0, WALK_IN: 0.45 },
+      coldStartProgressEmpty: true,
     },
     {
-      key: 'naruto-sand',
+      key: 'na-sand',
+      index: 8,
+      franchise: 'Naruto',
+      refPrefix: 'SVI',
       property: {
-        id: 'anime-prop-na-sand-village',
+        id: 'anime-prop-na-sand',
         slug: 'sand-village-inn',
         name: 'Sand Village Inn',
         city: 'Darjeeling',
@@ -350,49 +416,122 @@ function buildThemes(): ThemeDef[] {
         address: '5 Mall Road, Darjeeling',
       },
       tier: 'STARTER',
-      owner: { id: 'anime-user-naruto', name: 'Naruto Uzumaki', phone: '+919000330001' },
-      manager: { id: 'anime-user-gaara', name: 'Gaara of the Sand', phone: '+919000340002' },
+      owner: NARUTO,
+      coOwners: [],
+      manager: GAARA,
       housekeepers: [
-        { id: 'anime-user-sand-hk1', name: 'Temari Whirlwind', phone: '+919000340003' },
-        { id: 'anime-user-sand-hk2', name: 'Kankuro Puppet', phone: '+919000340004' },
+        { id: 'anime-user-temari', name: 'Temari Whirlwind', phone: hkPhone(8, 1) },
+        { id: 'anime-user-kankuro', name: 'Kankuro Puppet', phone: hkPhone(8, 2) },
       ],
-      guests: [
-        ['SV-G01', 'Baki Sand', '+919000349001'],
-        ['SV-G02', 'Ebizo Elder', '+919000349002'],
-        ['SV-G03', 'Chiyo Granny', '+919000349003'],
-        ['SV-G04', 'Yashamaru Uncle', '+919000349004'],
-        ['SV-G05', 'Pakura Scorch', '+919000349005'],
-        ['SV-G06', 'Maki Wind', '+919000349006'],
-      ].map((g) => ({ code: g[0]!, name: g[1]!, phone: g[2]! })),
-      reservationCount: 55,
+      guests: mkGuests('SVI', 8, NA_GUESTS.slice(8, 16)),
+      reservationCount: 45,
       roomTypes: [
-        { id: 'anime-rt-sand-std', name: 'Genin Room', maxOccupancy: 2, baseRate: '3200.00', floorRate: '2800.00', gstSlab: '12%', amenities: ['WiFi'] },
-        { id: 'anime-rt-sand-dlx', name: 'Jonin Deluxe', maxOccupancy: 3, baseRate: '5800.00', floorRate: '5100.00', gstSlab: '18%', amenities: ['WiFi', 'Mountain View'] },
+        { id: 'anime-rt-na-sand-std', name: 'Genin Room', maxOccupancy: 2, baseRate: '3200.00', floorRate: '2800.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-na-sand-dlx', name: 'Jonin Deluxe', maxOccupancy: 3, baseRate: '5800.00', floorRate: '5100.00', gstSlab: '18%', amenities: ['WiFi', 'Mountain View'] },
       ],
-      rooms: [
-        { id: 'anime-room-sand-101', number: '101', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-sand-102', number: '102', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-sand-103', number: '103', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-sand-104', number: '104', floor: 1, roomTypeKey: 'std' },
-        { id: 'anime-room-sand-201', number: '201', floor: 2, roomTypeKey: 'dlx' },
-        { id: 'anime-room-sand-202', number: '202', floor: 2, roomTypeKey: 'dlx' },
-      ],
+      rooms: mkRooms('na-sand', 4, 2, 0),
       sourceMix: { DIRECT_BOOKING: 0.55, OTA: 0.3, WALK_IN: 0.15 },
+      coldStartProgressEmpty: false,
+    },
+    {
+      key: 'na-hokage',
+      index: 9,
+      franchise: 'Naruto',
+      refPrefix: 'HTH',
+      property: {
+        id: 'anime-prop-na-hokage',
+        slug: 'hokage-tower-hotel',
+        name: 'Hokage Tower Hotel',
+        city: 'Gangtok',
+        state: 'Sikkim',
+        pincode: '737101',
+        address: '1 Hokage Square, MG Marg',
+      },
+      tier: 'GROWTH',
+      owner: NARUTO,
+      coOwners: [KAKASHI],
+      manager: SHIKAMARU,
+      housekeepers: [
+        { id: 'anime-user-choji', name: 'Choji Akimichi', phone: hkPhone(9, 1) },
+        { id: 'anime-user-ino', name: 'Ino Yamanaka', phone: hkPhone(9, 2) },
+      ],
+      guests: mkGuests('HTH', 9, NA_GUESTS.slice(16, 24)),
+      reservationCount: 70,
+      roomTypes: [
+        { id: 'anime-rt-na-hokage-std', name: 'Academy Room', maxOccupancy: 2, baseRate: '5000.00', floorRate: '4400.00', gstSlab: '12%', amenities: ['WiFi'] },
+        { id: 'anime-rt-na-hokage-dlx', name: 'Jonin Suite', maxOccupancy: 3, baseRate: '9000.00', floorRate: '8000.00', gstSlab: '18%', amenities: ['WiFi', 'City View'] },
+        { id: 'anime-rt-na-hokage-suite', name: 'Hokage Penthouse', maxOccupancy: 4, baseRate: '16000.00', floorRate: '14200.00', gstSlab: '18%', amenities: ['WiFi', 'City View', 'Lounge'] },
+      ],
+      rooms: mkRooms('na-hokage', 4, 3, 2),
+      sourceMix: { DIRECT_BOOKING: 0.4, OTA: 0.45, WALK_IN: 0.15 },
+      coldStartProgressEmpty: false,
     },
   ];
+}
+
+// ─── Property field helpers ────────────────────────────────────────────────
+
+function gstinForState(state: string, seed: number): string {
+  // Real GSTIN format: SS + 10-char PAN + 1 entity + Z + 1 checksum.
+  const stateCode = state === 'Sikkim' ? '11' : '19'; // West Bengal = 19
+  const filler = ['ABCDE1234F', 'PQRST5678G', 'XYZAB9012H', 'LMNOP3456J'][seed % 4]!;
+  return `${stateCode}${filler}1Z5`;
+}
+
+function stateCodeFor(state: string): string {
+  return state === 'Sikkim' ? '11' : '19';
+}
+
+function panFor(idx: number): string {
+  // 5 letters + 4 digits + 1 letter.
+  return `AAACT${String(1000 + idx)}F`;
+}
+
+function laundryVendorFor(city: string): string {
+  if (city === 'Darjeeling') return 'Himalayan Fresh Laundry';
+  if (city === 'Gangtok') return 'MG Marg Linen Co';
+  return 'Deolo Hill Washhouse';
+}
+
+function costConfigFor(theme: ThemeDef): object {
+  const archetype =
+    theme.tier === 'TRIAL'
+      ? 'BUDGET_GUESTHOUSE'
+      : theme.tier === 'STARTER'
+        ? 'MID_MARKET_HOTEL'
+        : 'BOUTIQUE_PROPERTY';
+  const scale = theme.tier === 'TRIAL' ? 1 : theme.tier === 'STARTER' ? 1.6 : 2.6;
+  return {
+    version: '1',
+    archetype,
+    fixedCosts: {
+      rentOrMortgage: Math.round(80000 * scale),
+      staffSalaries: Math.round(120000 * scale),
+      insurance: Math.round(8000 * scale),
+      utilitiesBase: Math.round(15000 * scale),
+      other: Math.round(10000 * scale),
+    },
+    variableCosts: {
+      housekeepingSupplies: Math.round(180 * scale),
+      laundry: Math.round(120 * scale),
+      amenities: Math.round(90 * scale),
+      utilitiesVariable: Math.round(70 * scale),
+      other: Math.round(40 * scale),
+    },
+    totalRooms: theme.rooms.length,
+    updatedAt: COLD_START_COMPLETED_AT.toISOString(),
+  };
 }
 
 // ─── Housekeeping setup ────────────────────────────────────────────────────
 // Each property gets enough catalog + room state to exercise every
 // housekeeping use case 5 times: 5 DIRTY rooms with mixed task types, ≥5
 // amenities + ≥5 linens, daily room assignments distributed across the
-// property's housekeepers. NO activity logs (ConsumptionLog, LaundryLog,
-// IssueReport) — properties start with a clean slate so the housekeeping
-// companion's flows can be tested fresh.
+// property's housekeepers.
 
 interface AmenityDef {
   id: string;
-  roomTypeKey: 'std' | 'dlx' | 'suite';
+  roomTypeKey: RoomTypeKey;
   name: string;
   unit: string;
   expectedQtyPerStay: number;
@@ -451,7 +590,7 @@ function dateOnly(d: Date): Date {
 async function seedHousekeeping(
   prisma: PrismaClient,
   theme: ThemeDef,
-  rtKeyToId: Record<'std' | 'dlx' | 'suite', string>,
+  rtKeyToId: Record<RoomTypeKey, string>,
 ): Promise<void> {
   const propertyId = theme.property.id;
   const today = dateOnly(NOW);
@@ -591,29 +730,45 @@ function pickSource(r: () => number, mix: ThemeDef['sourceMix']): string {
 async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
   const propertyId = theme.property.id;
 
-  // Property.
+  // Property — every profile field populated (rule 17: data fully filled even
+  // for the `coldStartProgress = {}` properties).
+  const propertyFields = {
+    name: theme.property.name,
+    address: theme.property.address,
+    city: theme.property.city,
+    state: theme.property.state,
+    pincode: theme.property.pincode,
+    gstin: gstinForState(theme.property.state, theme.property.name.length),
+    pan: panFor(theme.index),
+    stateCode: stateCodeFor(theme.property.state),
+    contactPhone: `+91354${2200000 + theme.index}`,
+    contactEmail: `hello@${theme.property.slug}.example.in`,
+    currency: 'INR',
+    timezone: 'Asia/Kolkata',
+    numberOfFloors: theme.tier === 'GROWTH' ? 3 : 2,
+    defaultCheckInTime: '14:00',
+    defaultCheckOutTime: '11:00',
+    directBookingEnabled: true,
+    bookingSlug: theme.property.slug,
+    averageOtaCommissionRate: theme.tier === 'GROWTH' ? 0.15 : 0.18,
+    laundryVendorName: laundryVendorFor(theme.property.city),
+    laundryVendorContact: `+91900005${String(theme.index).padStart(4, '0')}`,
+    costConfig: costConfigFor(theme),
+    // Rule 17 — 3 properties carry an empty progress object; the rest a
+    // completed wizard state.
+    coldStartProgress: theme.coldStartProgressEmpty ? {} : { lastCompletedStep: 7 },
+    // Rule 18 — onboarding completed before the first guest entry.
+    coldStartCompletedAt: COLD_START_COMPLETED_AT,
+    coldStartLinenDeferred: false,
+    active: true,
+  };
   await prisma.property.upsert({
     where: { slug: theme.property.slug },
-    update: {
-      name: theme.property.name,
-      city: theme.property.city,
-      state: theme.property.state,
-      pincode: theme.property.pincode,
-      address: theme.property.address,
-      active: true,
-    },
+    update: propertyFields,
     create: {
       id: propertyId,
-      name: theme.property.name,
       slug: theme.property.slug,
-      address: theme.property.address,
-      city: theme.property.city,
-      state: theme.property.state,
-      pincode: theme.property.pincode,
-      numberOfFloors: 3,
-      defaultCheckInTime: '14:00',
-      defaultCheckOutTime: '11:00',
-      active: true,
+      ...propertyFields,
     },
   });
 
@@ -627,9 +782,7 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
   const currentPeriodStart =
     theme.tier === 'TRIAL' ? trialStartedAt : new Date(NOW.getTime() - 25 * DAY_MS);
   const currentPeriodEnd =
-    theme.tier === 'TRIAL'
-      ? trialEndsAt
-      : new Date(currentPeriodStart.getTime() + 30 * DAY_MS);
+    theme.tier === 'TRIAL' ? trialEndsAt : new Date(currentPeriodStart.getTime() + 30 * DAY_MS);
 
   await prisma.subscription.upsert({
     where: { propertyId },
@@ -655,15 +808,17 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
     },
   });
 
-  // Users (owner, manager, housekeepers). User.phone is globally unique.
+  // Users + access. owner + co-owners → OWNER; manager → MANAGER; the rest →
+  // HOUSEKEEPING. User.phone is globally unique.
   const allUsers: Array<{ user: CharacterDef; role: 'OWNER' | 'MANAGER' | 'HOUSEKEEPING' }> = [
     { user: theme.owner, role: 'OWNER' },
+    ...theme.coOwners.map((co) => ({ user: co, role: 'OWNER' as const })),
     { user: theme.manager, role: 'MANAGER' },
     ...theme.housekeepers.map((hk) => ({ user: hk, role: 'HOUSEKEEPING' as const })),
   ];
   for (const { user, role } of allUsers) {
-    // No PIN initialised — every user goes through the PIN-creation flow on
-    // first login (Hotfix 1 Phase D).
+    // No PIN initialised (rule 14) — every user goes through the PIN-creation
+    // flow on first login.
     await prisma.user.upsert({
       where: { phone: user.phone },
       update: { name: user.name, pinHash: null },
@@ -693,7 +848,7 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
   }
 
   // Room types.
-  const rtKeyToId: Record<'std' | 'dlx' | 'suite', string> = { std: '', dlx: '', suite: '' };
+  const rtKeyToId: Record<RoomTypeKey, string> = { std: '', dlx: '', suite: '' };
   for (const [idx, rt] of theme.roomTypes.entries()) {
     await prisma.roomType.upsert({
       where: { propertyId_name: { propertyId, name: rt.name } },
@@ -730,7 +885,7 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
     });
   }
 
-  // Guests.
+  // Guests — consent recorded before the booking window opens.
   for (const g of theme.guests) {
     const guestId = `${theme.key}-${g.code}`;
     await prisma.guest.upsert({
@@ -742,7 +897,7 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
         guestCode: g.code,
         fullName: g.name,
         phone: g.phone,
-        consentGivenAt: new Date(NOW.getTime() - 300 * DAY_MS),
+        consentGivenAt: GUEST_CONSENT_AT,
       },
     });
   }
@@ -773,8 +928,6 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
   // the past year. Future reservations are further gated by a per-week skip so
   // some weeks are intentionally empty.
   const futureShare = 0.25;
-  // Pre-pick a sparse set of "off-weeks" in the future window — these slots
-  // refuse to host any future reservation (random idle weeks for demo polish).
   const futureWeeks = Math.ceil(FUTURE_DAYS / 7);
   const offWeeks = new Set<number>();
   for (let w = 0; w < futureWeeks; w++) {
@@ -785,7 +938,6 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
   for (let i = 0; i < theme.reservationCount; i++) {
     let checkInTs: number;
     if (r() < futureShare) {
-      // Future placement, but skip any check-in falling inside an off-week.
       let attempts = 0;
       do {
         checkInTs = NOW.getTime() + Math.floor(r() * (futureLimit - NOW.getTime()));
@@ -804,7 +956,6 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
     const guestId = guestIds[Math.floor(r() * guestIds.length)]!;
     const source = pickSource(r, theme.sourceMix);
 
-    // Status by time-relation to NOW.
     let status: 'CHECKED_OUT' | 'CHECKED_IN' | 'CONFIRMED' | 'CANCELLED';
     if (checkOutDate.getTime() < NOW.getTime()) {
       status = r() < 0.06 ? 'CANCELLED' : 'CHECKED_OUT';
@@ -819,7 +970,7 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
     const nightlyRate = Math.round(baseRate * rateJitter);
 
     const reservationId = `${theme.key}-resv-${String(i + 1).padStart(3, '0')}`;
-    const bookingRef = `${theme.key.toUpperCase().slice(0, 2)}-${checkInDate.toISOString().slice(0, 10).replace(/-/g, '')}-${String(i + 1).padStart(3, '0')}`;
+    const bookingRef = `${theme.refPrefix}-${checkInDate.toISOString().slice(0, 10).replace(/-/g, '')}-${String(i + 1).padStart(3, '0')}`;
 
     await prisma.reservation.upsert({
       where: { id: reservationId },
@@ -851,7 +1002,7 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
     // Folio for stays that actually happened.
     if (status === 'CHECKED_OUT' || status === 'CHECKED_IN') {
       const folioId = `${theme.key}-folio-${String(i + 1).padStart(3, '0')}`;
-      const invoiceNumber = `${theme.key.toUpperCase().slice(0, 2)}-INV-${String(folioCounter).padStart(4, '0')}`;
+      const invoiceNumber = `${theme.refPrefix}-INV-${String(folioCounter).padStart(4, '0')}`;
       folioCounter += 1;
       await prisma.folio.upsert({
         where: { id: folioId },
@@ -912,16 +1063,13 @@ async function seedTheme(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
   }
 
   // Housekeeping setup — catalog, dirty rooms, today's assignments, baseline
-  // room state. No activity logs (clean slate for testing).
+  // room state.
   await seedHousekeeping(prisma, theme, rtKeyToId);
 }
 
 // ─── Density fill-up pass ──────────────────────────────────────────────────
 // Guarantees ≥4 arrivals and ≥4 departures per ISO week (Mon–Sun) per property
-// for May 2026 and June 2026. We compute the week index from a Monday epoch,
-// count existing arrivals/departures keyed by week, then synthesise extra
-// reservations until the floor is met. New reservations follow the same shape
-// as the random pass — Reservation + Folio + FolioLines (for CHECKED_OUT).
+// for May 2026 and June 2026 — the current and coming calendar months.
 
 function mondayOf(d: Date): Date {
   const day = d.getUTCDay(); // 0 = Sun
@@ -932,17 +1080,11 @@ function mondayOf(d: Date): Date {
 }
 
 function weekKey(d: Date): string {
-  const m = mondayOf(d);
-  return m.toISOString().slice(0, 10);
+  return mondayOf(d).toISOString().slice(0, 10);
 }
 
-// Returns the list of ISO-week-Monday keys that fall (start of week) inside
-// May 1 → June 30 2026, plus surrounding weeks whose Mon-Sun overlaps that
-// range. We use simple Mon-Sun calendar weeks starting on Mondays whose date
-// is within May/June or whose Sunday is within May/June.
 function targetWeekStarts(): Date[] {
   const out: Date[] = [];
-  // Walk from late-April Monday through end of June.
   const start = mondayOf(new Date(Date.UTC(2026, 4, 1))); // May = month 4
   const endLimit = new Date(Date.UTC(2026, 6, 1)); // exclusive: July 1
   for (let t = start.getTime(); t < endLimit.getTime(); t += 7 * DAY_MS) {
@@ -957,18 +1099,16 @@ async function fillUpDensity(prisma: PrismaClient, theme: ThemeDef): Promise<voi
   const guestIds = theme.guests.map((g) => `${theme.key}-${g.code}`);
   const rooms = theme.rooms;
 
-  // Per-room-type id lookup. Read from DB to handle existing rows.
   const dbRoomTypes = await prisma.roomType.findMany({
     where: { propertyId, deletedAt: null },
   });
-  const rtKeyToId: Record<'std' | 'dlx' | 'suite', string> = { std: '', dlx: '', suite: '' };
+  const rtKeyToId: Record<RoomTypeKey, string> = { std: '', dlx: '', suite: '' };
   for (const [idx, rt] of theme.roomTypes.entries()) {
     const match = dbRoomTypes.find((d) => d.name === rt.name);
     const key = (['std', 'dlx', 'suite'] as const)[idx];
     if (key && match) rtKeyToId[key] = match.id;
   }
 
-  // Count arrivals / departures per week using all existing reservations.
   const existing = await prisma.reservation.findMany({
     where: { propertyId, status: { in: ['CHECKED_IN', 'CHECKED_OUT', 'CONFIRMED'] } },
     select: { id: true, checkIn: true, checkOut: true },
@@ -984,23 +1124,15 @@ async function fillUpDensity(prisma: PrismaClient, theme: ThemeDef): Promise<voi
 
   const FLOOR = 4;
   let counter = 0;
-  // We need a deterministic suffix for ids; the theme key + sequence works.
   const cancelPolicyId = `${theme.key}-policy-flex`;
 
   for (const weekStart of targetWeekStarts()) {
     const wKey = weekKey(weekStart);
     let arrivals = arrivalsByWeek.get(wKey) ?? 0;
     let departures = departuresByWeek.get(wKey) ?? 0;
-    // We may need both arrivals and departures within this week. Each new
-    // reservation we place to add an arrival will land its departure either in
-    // the same week or next week (1–3 nights). So we top up arrivals first,
-    // tracking spill into departures, then top up departures if still short.
     let safety = 0;
     while ((arrivals < FLOOR || departures < FLOOR) && safety < 20) {
       safety += 1;
-      // Pick a day within this week (Mon..Sun). If we still need arrivals,
-      // anchor on an arrival inside the week. Otherwise we anchor checkOut
-      // inside the week by placing the reservation 1-3 nights earlier.
       const needArrival = arrivals < FLOOR;
       let checkInDate: Date;
       let nights: number;
@@ -1009,7 +1141,6 @@ async function fillUpDensity(prisma: PrismaClient, theme: ThemeDef): Promise<voi
         checkInDate = new Date(weekStart.getTime() + dayOffset * DAY_MS);
         nights = 1 + Math.floor(r() * 3); // 1-3 nights
       } else {
-        // Need a departure landing in this week.
         nights = 1 + Math.floor(r() * 3);
         const dayOffset = Math.floor(r() * 7);
         const desiredCheckOut = new Date(weekStart.getTime() + dayOffset * DAY_MS);
@@ -1033,7 +1164,7 @@ async function fillUpDensity(prisma: PrismaClient, theme: ThemeDef): Promise<voi
       counter += 1;
       const seq = String(counter).padStart(3, '0');
       const reservationId = `${theme.key}-fill-${wKey}-${seq}`;
-      const bookingRef = `${theme.key.toUpperCase().slice(0, 2)}-F-${wKey.replace(/-/g, '')}-${seq}`;
+      const bookingRef = `${theme.refPrefix}-F-${wKey.replace(/-/g, '')}-${seq}`;
 
       await prisma.reservation.upsert({
         where: { id: reservationId },
@@ -1064,7 +1195,7 @@ async function fillUpDensity(prisma: PrismaClient, theme: ThemeDef): Promise<voi
 
       if (status === 'CHECKED_OUT' || status === 'CHECKED_IN') {
         const folioId = `${theme.key}-fill-folio-${wKey}-${seq}`;
-        const invoiceNumber = `${theme.key.toUpperCase().slice(0, 2)}-FINV-${wKey.replace(/-/g, '')}-${seq}`;
+        const invoiceNumber = `${theme.refPrefix}-FINV-${wKey.replace(/-/g, '')}-${seq}`;
         await prisma.folio.upsert({
           where: { id: folioId },
           update: { status: status === 'CHECKED_OUT' ? 'CLOSED' : 'OPEN' },
@@ -1100,7 +1231,6 @@ async function fillUpDensity(prisma: PrismaClient, theme: ThemeDef): Promise<voi
         }
       }
 
-      // Update local counters.
       const aKey = weekKey(checkInDate);
       const dKey = weekKey(checkOutDate);
       arrivalsByWeek.set(aKey, (arrivalsByWeek.get(aKey) ?? 0) + 1);
@@ -1114,14 +1244,6 @@ async function fillUpDensity(prisma: PrismaClient, theme: ThemeDef): Promise<voi
 // ─── GST Invoices ──────────────────────────────────────────────────────────
 // One Invoice per CLOSED folio. Most are PAID (B2C, no recipient GSTIN).
 // ~10% are B2B with a synthetic recipient GSTIN. CGST + SGST split 50/50.
-
-function gstinForState(state: string, seed: number): string {
-  // Real GSTIN format: SS + 10-char PAN + 1 entity + Z + 1 checksum.
-  // We don't validate — just pick state-code prefix + filler.
-  const stateCode = state === 'Sikkim' ? '11' : '19'; // West Bengal = 19
-  const filler = ['ABCDE1234F', 'PQRST5678G', 'XYZAB9012H', 'LMNOP3456J'][seed % 4]!;
-  return `${stateCode}${filler}1Z5`;
-}
 
 async function seedInvoices(prisma: PrismaClient, theme: ThemeDef): Promise<void> {
   const propertyId = theme.property.id;
@@ -1143,10 +1265,7 @@ async function seedInvoices(prisma: PrismaClient, theme: ThemeDef): Promise<void
     idx += 1;
     const checkIn = reservation.checkIn;
     const checkOut = reservation.checkOut;
-    const nights = Math.max(
-      1,
-      Math.round((checkOut.getTime() - checkIn.getTime()) / DAY_MS),
-    );
+    const nights = Math.max(1, Math.round((checkOut.getTime() - checkIn.getTime()) / DAY_MS));
     const taxableValue = lines.reduce((acc, l) => acc + Number(l.amount), 0);
     const taxTotal = lines.reduce((acc, l) => acc + Number(l.taxAmount), 0);
     const cgst = +(taxTotal / 2).toFixed(2);
@@ -1155,8 +1274,7 @@ async function seedInvoices(prisma: PrismaClient, theme: ThemeDef): Promise<void
     const status = r() < 0.8 ? 'PAID' : 'ISSUED';
     const isB2B = r() < 0.1;
     const recipientGstin = isB2B ? gstinForState(theme.property.state, idx) : null;
-    const rate =
-      (reservation.rateSnapshot as { nightlyRate?: number } | null)?.nightlyRate ?? 0;
+    const rate = (reservation.rateSnapshot as { nightlyRate?: number } | null)?.nightlyRate ?? 0;
     const invoiceId = `${theme.key}-inv-${String(idx).padStart(4, '0')}`;
 
     await prisma.invoice.upsert({
@@ -1174,7 +1292,7 @@ async function seedInvoices(prisma: PrismaClient, theme: ThemeDef): Promise<void
         propertyId,
         folioId: folio.id,
         guestId: folio.guestId,
-        invoiceNumber: folio.invoiceNumber ?? `${theme.key.toUpperCase().slice(0, 2)}-INV-${String(idx).padStart(4, '0')}`,
+        invoiceNumber: folio.invoiceNumber ?? `${theme.refPrefix}-INV-${String(idx).padStart(4, '0')}`,
         type: 'INVOICE',
         status,
         supplierGstin,
@@ -1244,9 +1362,9 @@ async function seedAuditLogs(prisma: PrismaClient, theme: ThemeDef): Promise<voi
     prisma.guest.findMany({ where: { propertyId } }),
   ]);
   const guestById = new Map(guests.map((g) => [g.id, g]));
-  const reservations = reservationsRaw.map((r) => ({
-    ...r,
-    guest: guestById.get(r.guestId) ?? null,
+  const reservations = reservationsRaw.map((res) => ({
+    ...res,
+    guest: guestById.get(res.guestId) ?? null,
   }));
 
   const checkedOut = reservations.filter((x) => x.status === 'CHECKED_OUT');
@@ -1296,8 +1414,7 @@ async function seedAuditLogs(prisma: PrismaClient, theme: ThemeDef): Promise<voi
         const res = checkedOut[Math.floor(r() * checkedOut.length)];
         if (!res) continue;
         entityId = res.id;
-        const rate =
-          (res.rateSnapshot as { nightlyRate?: number } | null)?.nightlyRate ?? 0;
+        const rate = (res.rateSnapshot as { nightlyRate?: number } | null)?.nightlyRate ?? 0;
         metadata = {
           guestName: res.guest?.fullName ?? 'Guest',
           reservationCode: res.bookingReference ?? res.id,
@@ -1330,20 +1447,14 @@ async function seedAuditLogs(prisma: PrismaClient, theme: ThemeDef): Promise<voi
         const f = folios[Math.floor(r() * folios.length)];
         if (!f) continue;
         entityId = f.id;
-        metadata = {
-          amount: 200 + Math.floor(r() * 1500),
-          reason: 'Goodwill refund',
-        };
+        metadata = { amount: 200 + Math.floor(r() * 1500), reason: 'Goodwill refund' };
         break;
       }
       case 'FOLIO_LINE_VOIDED': {
         const f = folios[Math.floor(r() * folios.length)];
         if (!f) continue;
         entityId = f.id;
-        metadata = {
-          amount: 100 + Math.floor(r() * 1000),
-          reason: 'Posted in error',
-        };
+        metadata = { amount: 100 + Math.floor(r() * 1000), reason: 'Posted in error' };
         break;
       }
       case 'RATE_OVERRIDE_BELOW_FLOOR': {
@@ -1351,21 +1462,14 @@ async function seedAuditLogs(prisma: PrismaClient, theme: ThemeDef): Promise<voi
         if (!res) continue;
         entityId = res.id;
         const floor = 3000 + Math.floor(r() * 2000);
-        metadata = {
-          amount: floor - 200,
-          floor,
-          reason: 'Long-stay corporate rate',
-        };
+        metadata = { amount: floor - 200, floor, reason: 'Long-stay corporate rate' };
         break;
       }
       case 'DISCOUNT_APPLIED': {
         const res = reservations[Math.floor(r() * reservations.length)];
         if (!res) continue;
         entityId = res.id;
-        metadata = {
-          amount: 200 + Math.floor(r() * 800),
-          reason: 'Loyalty discount',
-        };
+        metadata = { amount: 200 + Math.floor(r() * 800), reason: 'Loyalty discount' };
         break;
       }
       case 'GUEST_ID_REVEALED': {
@@ -1392,10 +1496,7 @@ async function seedAuditLogs(prisma: PrismaClient, theme: ThemeDef): Promise<voi
         const inv = invoices[Math.floor(r() * invoices.length)];
         if (!inv) continue;
         entityId = inv.id;
-        metadata = {
-          invoiceNumber: inv.invoiceNumber,
-          amount: Number(inv.totalAmount),
-        };
+        metadata = { invoiceNumber: inv.invoiceNumber, amount: Number(inv.totalAmount) };
         break;
       }
       case 'CHANNEL_CONNECTED':
@@ -1410,7 +1511,7 @@ async function seedAuditLogs(prisma: PrismaClient, theme: ThemeDef): Promise<voi
 
     await prisma.auditLog.upsert({
       where: { id },
-      update: { metadata: metadata as object, fromState, toState, createdAt },
+      update: { metadata: metadata as Prisma.InputJsonValue, fromState, toState, createdAt },
       create: {
         id,
         propertyId,
@@ -1421,7 +1522,7 @@ async function seedAuditLogs(prisma: PrismaClient, theme: ThemeDef): Promise<voi
         toState,
         actorId,
         actorRole,
-        metadata: metadata as object,
+        metadata: metadata as Prisma.InputJsonValue,
         createdAt,
       },
     });
@@ -1436,7 +1537,6 @@ async function seedHousekeepingLogs(prisma: PrismaClient, theme: ThemeDef): Prom
   const hkUsers = theme.housekeepers;
   if (hkUsers.length === 0) return;
 
-  // Pull rooms + their room type so we can match amenity catalog items.
   const rooms = await prisma.room.findMany({
     where: { propertyId, deletedAt: null },
     select: { id: true, roomTypeId: true },
@@ -1450,7 +1550,7 @@ async function seedHousekeepingLogs(prisma: PrismaClient, theme: ThemeDef): Prom
     where: { propertyId, itemType: 'LINEN', deletedAt: null },
   });
 
-  // 5–10 ConsumptionLog rows
+  // 5–10 ConsumptionLog rows.
   const consumptionCount = 5 + Math.floor(r() * 6);
   for (let i = 0; i < consumptionCount; i++) {
     const room = rooms[Math.floor(r() * rooms.length)]!;
@@ -1476,9 +1576,7 @@ async function seedHousekeepingLogs(prisma: PrismaClient, theme: ThemeDef): Prom
     });
   }
 
-  // 3–5 LaundryLog rows. Allowed states per DB check constraint
-  // (migrations/20260514010000_epic11_consumption_laundry): ITEMS_OUT |
-  // ITEMS_IN | CLOSED. Rotate through the full lifecycle.
+  // 3–5 LaundryLog rows — rotate through ITEMS_OUT | ITEMS_IN | CLOSED.
   const states = ['ITEMS_OUT', 'ITEMS_IN', 'CLOSED'];
   const laundryCount = 3 + Math.floor(r() * 3);
   for (let i = 0; i < laundryCount; i++) {
@@ -1501,12 +1599,7 @@ async function seedHousekeepingLogs(prisma: PrismaClient, theme: ThemeDef): Prom
     });
   }
 
-  // 1–2 IssueReport rows. Allowed enum values are pinned by DB check
-  // constraints in migrations/20260514020000_epic11_issue_reports:
-  //   entryContext       ∈ COLD | MISSING_FROM_ROOM | DAMAGED_ON_RETURN
-  //   category           ∈ DAMAGE_IN_ROOM | MISSING_ITEM | DAMAGED_RETURN | OTHER
-  //   attributionStream  ∈ ROOM_SHORTAGE | LAUNDRY_SHORTAGE | OTHER
-  //   status             ∈ PENDING_REVIEW | APPROVED | REJECTED
+  // 1–2 IssueReport rows — enum values pinned by DB check constraints.
   const issueRecipes: Array<{
     entryContext: string;
     category: string;
@@ -1555,7 +1648,10 @@ export async function seedAnimeProperties(prisma: PrismaClient): Promise<void> {
   const themes = buildThemes();
 
   for (const theme of themes) {
-    console.log(`[seed:anime] ${theme.property.name} (${theme.tier}, ${theme.housekeepers.length} HK)`);
+    const owners = [theme.owner, ...theme.coOwners].map((o) => o.name).join(' + ');
+    console.log(
+      `[seed:anime] ${theme.property.name} (${theme.tier}, ${theme.property.city}, owner: ${owners})`,
+    );
     await seedTheme(prisma, theme);
   }
 
@@ -1581,51 +1677,69 @@ export async function seedAnimeProperties(prisma: PrismaClient): Promise<void> {
     );
   }
 
-  // Credentials markdown table — Owner / Manager / Housekeeping per user with
-  // every property they have access to (multi-property owners collapse to a
-  // single row).
-  type Row = { name: string; phone: string; role: string; properties: Set<string> };
-  const byUserId = new Map<string, Row>();
+  // ── Rule 19 — login credentials table ────────────────────────────────────
+  // One row per user; multi-property users collapse to a single row listing
+  // every property they touch.
+  type CredRow = { name: string; phone: string; role: string; properties: Set<string> };
+  const byUserId = new Map<string, CredRow>();
   for (const theme of themes) {
     const propName = theme.property.name;
     const add = (user: CharacterDef, role: 'OWNER' | 'MANAGER' | 'HOUSEKEEPING') => {
       const existing = byUserId.get(user.id);
       if (existing) {
         existing.properties.add(propName);
-        // Owner wins over Manager wins over Housekeeping in display priority.
         const priority: Record<string, number> = { OWNER: 3, MANAGER: 2, HOUSEKEEPING: 1 };
         if (priority[role]! > priority[existing.role]!) existing.role = role;
         return;
       }
-      byUserId.set(user.id, {
-        name: user.name,
-        phone: user.phone,
-        role,
-        properties: new Set([propName]),
-      });
+      byUserId.set(user.id, { name: user.name, phone: user.phone, role, properties: new Set([propName]) });
     };
     add(theme.owner, 'OWNER');
+    for (const co of theme.coOwners) add(co, 'OWNER');
     add(theme.manager, 'MANAGER');
     for (const hk of theme.housekeepers) add(hk, 'HOUSEKEEPING');
   }
 
   const rolePriority: Record<string, number> = { OWNER: 0, MANAGER: 1, HOUSEKEEPING: 2 };
-  const rows = Array.from(byUserId.values()).sort((a, b) => {
-    const r = rolePriority[a.role]! - rolePriority[b.role]!;
-    if (r !== 0) return r;
+  const credRows = Array.from(byUserId.values()).sort((a, b) => {
+    const rp = rolePriority[a.role]! - rolePriority[b.role]!;
+    if (rp !== 0) return rp;
     return a.name.localeCompare(b.name);
   });
 
-  const lines = [
-    '',
-    '[seed:anime] Demo credentials (OTP login — no PINs seeded):',
-    '',
-    '| User | Phone | Role | Properties |',
-    '| --- | --- | --- | --- |',
-    ...rows.map(
-      (r) => `| ${r.name} | ${r.phone} | ${r.role} | ${Array.from(r.properties).join(', ')} |`,
-    ),
-    '',
-  ];
-  console.log(lines.join('\n'));
+  console.log(
+    [
+      '',
+      '[seed:anime] Login credentials (OTP login — no PINs seeded):',
+      '',
+      '| User | Phone | Role | Properties |',
+      '| --- | --- | --- | --- |',
+      ...credRows.map(
+        (row) => `| ${row.name} | ${row.phone} | ${row.role} | ${Array.from(row.properties).join(', ')} |`,
+      ),
+      '',
+    ].join('\n'),
+  );
+
+  // ── Rule 20 — properties with multiple owners ────────────────────────────
+  const coOwned = themes.filter((t) => t.coOwners.length > 0);
+  console.log(
+    [
+      '[seed:anime] Properties with multiple owners:',
+      '',
+      '| Property | Franchise | Tier | City | Owners |',
+      '| --- | --- | --- | --- | --- |',
+      ...coOwned.map(
+        (t) =>
+          `| ${t.property.name} | ${t.franchise} | ${t.tier} | ${t.property.city} | ${[t.owner, ...t.coOwners].map((o) => o.name).join(', ')} |`,
+      ),
+      '',
+    ].join('\n'),
+  );
+
+  // ── Properties carrying coldStartProgress = {} (rule 17) ─────────────────
+  const emptyProgress = themes.filter((t) => t.coldStartProgressEmpty).map((t) => t.property.name);
+  console.log(
+    `[seed:anime] coldStartProgress = {} on: ${emptyProgress.join(', ')} (all property data still fully populated)`,
+  );
 }

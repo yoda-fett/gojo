@@ -83,7 +83,7 @@ export default async function SettingsHomePage() {
       status: countStatus(rooms, 'room'),
     },
     {
-      title: 'Users & Roles',
+      title: 'Users and Roles',
       description: 'Invite Managers, Front Desk and Housekeeping staff and assign roles.',
       icon: '👥',
       href: '/settings/users-roles',

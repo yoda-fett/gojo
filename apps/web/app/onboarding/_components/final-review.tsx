@@ -178,10 +178,10 @@ export function FinalReview({ data }: { data: FinalReviewData }) {
         )}
       </Section>
 
-      {/* 4. Users & Roles */}
+      {/* 4. Users and Roles */}
       <Section
         step={4}
-        title="Users & Roles"
+        title="Users and Roles"
         pill={<MetaPill>{data.team.total} user{data.team.total === 1 ? '' : 's'}</MetaPill>}
         onEdit={() => goToStep(4)}
       >

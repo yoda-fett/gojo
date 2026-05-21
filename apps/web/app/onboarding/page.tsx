@@ -117,7 +117,7 @@ export default async function OnboardingPage() {
     },
   });
 
-  // ── Step 4 — Users & Roles ─────────────────────────────────────────────
+  // ── Step 4 — Users and Roles ─────────────────────────────────────────────
   const [accessList, currentProperty, ownAccess] = await Promise.all([
     prisma.propertyAccess.findMany({
       where: { propertyId: actor.propertyId, deletedAt: null, revokedAt: null },
@@ -142,11 +142,21 @@ export default async function OnboardingPage() {
     }),
   ]);
 
+  const ownPropertyIds = ownAccess.map((a) => a.propertyId);
   const ownProperties = await prisma.property.findMany({
-    where: { id: { in: ownAccess.map((a) => a.propertyId) } },
+    where: { id: { in: ownPropertyIds } },
     select: { id: true, name: true, city: true, state: true },
   });
   const propById = new Map(ownProperties.map((p) => [p.id, p]));
+
+  // OWNER count per property (soft-deleted / revoked access excluded) — drives
+  // the Owner vs Co-owner chip per row in the multi-property card.
+  const ownerCounts = await prisma.propertyAccess.groupBy({
+    by: ['propertyId'],
+    where: { propertyId: { in: ownPropertyIds }, role: 'OWNER', deletedAt: null, revokedAt: null },
+    _count: true,
+  });
+  const ownerCountByProp = new Map(ownerCounts.map((g) => [g.propertyId, g._count]));
   const users = await prisma.user.findMany({
     where: { id: { in: accessList.map((a) => a.userId) } },
     select: { id: true, name: true, phone: true },
@@ -174,6 +184,7 @@ export default async function OnboardingPage() {
         location: [p.city, p.state].filter(Boolean).join(', '),
         role: a.role,
         isCurrent: p.id === actor.propertyId,
+        ownerCount: ownerCountByProp.get(p.id) ?? 0,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);

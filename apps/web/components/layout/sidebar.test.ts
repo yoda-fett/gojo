@@ -20,7 +20,7 @@ describe('buildSections — Settings rail', () => {
       'Room Types',
       'Rooms',
       'Rate Plans',
-      'Users & Roles',
+      'Users and Roles',
       'Housekeeping Catalog',
       'Direct Booking',
     ]);
@@ -53,7 +53,7 @@ describe('buildSections — Settings rail', () => {
     expect(disabledByLabel['Room Types']).toBe(false);
     expect(disabledByLabel['Rooms']).toBe(false);
     expect(disabledByLabel['Rate Plans']).toBe(false);
-    expect(disabledByLabel['Users & Roles']).toBe(false);
+    expect(disabledByLabel['Users and Roles']).toBe(false);
     expect(disabledByLabel['Housekeeping Catalog']).toBe(false);
     expect(disabledByLabel['Direct Booking']).toBe(false);
   });

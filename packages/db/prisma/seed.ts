@@ -36,11 +36,12 @@ function maskUrl(url: string | undefined) {
 }
 
 // Anime-only seed. The single source of demo data is seedAnimeProperties() —
-// seven themed properties (One Piece / Demon Slayer / Naruto) across the three
+// nine themed properties (One Piece / Demon Slayer / Naruto) spanning all three
 // subscription tiers and three hill-station cities (Darjeeling, Gangtok,
 // Kalimpong), with ~1 year of reservations, GST invoices, audit trails and
-// housekeeping activity. Fully idempotent: re-running upserts by stable string
-// IDs — no drops, safe to run against the production DB before go-live.
+// housekeeping activity. Three owners hold multiple properties; three
+// properties carry co-owners. Fully idempotent: re-running upserts by stable
+// string IDs — no drops, safe to run against the production DB before go-live.
 async function main() {
   console.log(`[seed] DATABASE_URL=${maskUrl(process.env.DATABASE_URL)}`);
   if (!process.env.DATABASE_URL) {

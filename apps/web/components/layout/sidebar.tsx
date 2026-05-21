@@ -62,14 +62,14 @@ export function buildSections(role?: Role): NavSection[] {
 
   // Settings rail — 12-7a AC1 order + Direct Booking retained (user decision
   // 2026-05-15). Entries whose screens are not built yet are disabled "Soon"
-  // (Property Profile/Room Types/Rooms/Users & Roles → 12.7b–e; Rate Plans → 12.7f).
+  // (Property Profile/Room Types/Rooms/Users and Roles → 12.7b–e; Rate Plans → 12.7f).
   const settingsItems: NavLeaf[] = [
     { label: 'Switch Board', href: '/settings', icon: Cog, exact: true },
     { label: 'Property Profile', href: '/settings/property-profile', icon: Home },
     { label: 'Room Types', href: '/settings/room-types', icon: LayoutDashboard },
     { label: 'Rooms', href: '/settings/rooms', icon: ClipboardList },
     { label: 'Rate Plans', href: '/settings/rate-plans', icon: Sparkles },
-    { label: 'Users & Roles', href: '/settings/users-roles', icon: Users },
+    { label: 'Users and Roles', href: '/settings/users-roles', icon: Users },
     { label: 'Housekeeping Catalog', href: '/settings/housekeeping/catalog', icon: Boxes },
     { label: 'Direct Booking', href: '/settings/direct-booking', icon: Link2 },
   ];

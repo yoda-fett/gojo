@@ -14,6 +14,7 @@ import { requireRole } from '@/lib/auth/require-role';
 
 const inviteSchema = z.object({
   phone: z.string().regex(/^\+?[0-9]{10,15}$/),
+  name: z.string().trim().min(1).max(80),
   // OWNER is invitable as a co-owner — full owner access to this property.
   role: z.enum(['OWNER', 'MANAGER', 'FRONT_DESK', 'HOUSEKEEPING']),
 });
@@ -74,8 +75,9 @@ export async function POST(req: NextRequest, context: Context) {
     const body = inviteSchema.parse(await req.json());
     const user = await prisma.user.upsert({
       where: { phone: body.phone },
+      // Don't rename an existing Gojo user — only stamp the name on a new one.
       update: {},
-      create: { phone: body.phone },
+      create: { phone: body.phone, name: body.name },
     });
 
     const existing = await prisma.propertyAccess.findUnique({

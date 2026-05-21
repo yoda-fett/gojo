@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageShell } from '@/components/layout/page-shell';
 
-// Story 12.7e — Users & Roles client.
+// Story 12.7e — Users and Roles client.
 // All mutations hit the existing Story 2.5 endpoints. Refetch list after each
 // mutation. "Resend invite" re-POSTs the same { phone, role } — the team
 // route already handles re-invite of PENDING rows (updates invitedAt + new
@@ -27,6 +27,8 @@ type Property = {
   location: string;
   role: string;
   isCurrent: boolean;
+  // OWNER access rows on this property (soft-deleted / revoked excluded).
+  ownerCount: number;
 };
 
 const TEAL = '#1DA888';
@@ -65,7 +67,8 @@ export function UsersRolesClient({
 }) {
   const [rows, setRows] = useState<Row[]>(initialRows);
   const [showForm, setShowForm] = useState(false);
-  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [phoneDigits, setPhoneDigits] = useState('');
   const [role, setRole] = useState<(typeof INVITABLE_ROLES)[number]>('MANAGER');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,17 +93,22 @@ export function UsersRolesClient({
   async function invite() {
     setError(null);
     setInfo(null);
-    const normalized = phone.replace(/\s/g, '');
-    if (!/^\+?[0-9]{10,15}$/.test(normalized)) {
-      setError('Enter a valid mobile number.');
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError("Enter the team member's name.");
       return;
     }
+    if (phoneDigits.length !== 10) {
+      setError('Enter a valid 10-digit mobile number.');
+      return;
+    }
+    const normalized = `+91${phoneDigits}`;
     setBusy(true);
     try {
       const res = await fetch(`/api/properties/${propertyId}/team`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: normalized, role }),
+        body: JSON.stringify({ phone: normalized, name: trimmedName, role }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -109,7 +117,8 @@ export function UsersRolesClient({
       }
       await refetch();
       setShowForm(false);
-      setPhone('');
+      setName('');
+      setPhoneDigits('');
       setRole('MANAGER');
       setInfo('Invitation sent.');
     } finally {
@@ -165,8 +174,8 @@ export function UsersRolesClient({
       header={
         <PageHeader
           variant="minimal"
-          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Users & Roles' }]}
-          title="Users & Roles"
+          eyebrow={[{ label: 'Settings', href: '/settings' }, { label: 'Users and Roles' }]}
+          title="Users and Roles"
           subtitle={
             <>
               Invite your team to <strong>{propertyName}</strong> and assign each person a role. Invitations are sent as
@@ -224,23 +233,39 @@ export function UsersRolesClient({
           >
             <div style={{ fontSize: 13, fontWeight: 600, color: '#0F7A5E', marginBottom: 14 }}>✎ Invite team member</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 20px' }}>
-              <Field label="Mobile number" hint="10-digit Indian mobile · the OTP invitation is sent here">
+              <Field label="Full name" hint="Shown across the team — the invitee can update it later">
                 <input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+91 98765 43210"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Nico Robin"
                   style={input}
                 />
               </Field>
-              <Field label="Role" hint="Co-owner has full owner access to this property">
-                <select value={role} onChange={(e) => setRole(e.target.value as any)} style={input}>
-                  {INVITABLE_ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABELS[r] ?? r}
-                    </option>
-                  ))}
-                </select>
+              <Field label="Mobile number" hint="10-digit Indian mobile · the OTP invitation is sent here">
+                <div style={phoneRow}>
+                  <span style={phonePrefix}>+91</span>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={phoneDigits}
+                    onChange={(e) => setPhoneDigits(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    placeholder="98765 43210"
+                    maxLength={10}
+                    style={phoneInput}
+                  />
+                </div>
               </Field>
+              <div style={{ gridColumn: 2 }}>
+                <Field label="Role" hint="Co-owner has full owner access to this property">
+                  <select value={role} onChange={(e) => setRole(e.target.value as any)} style={input}>
+                    {INVITABLE_ROLES.map((r) => (
+                      <option key={r} value={r}>
+                        {ROLE_LABELS[r] ?? r}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
             </div>
             <div
               style={{
@@ -329,7 +354,12 @@ export function UsersRolesClient({
                   </div>
                 </td>
                 <td style={td}>
-                  <RolePill role={r.role} />
+                  <RolePill
+                    role={r.role}
+                    label={
+                      r.role === 'OWNER' ? (multipleOwners ? 'Co-owner' : 'Owner') : undefined
+                    }
+                  />
                 </td>
                 <td style={td}>
                   <StatusPill status={r.status} />
@@ -395,7 +425,7 @@ export function UsersRolesClient({
       {/* Co-owner / multi-property card (AC5) */}
       <div style={{ background: '#fff', borderRadius: 12, boxShadow: '0 1px 3px rgba(26,43,46,0.05)', overflow: 'hidden' }}>
         <div style={{ padding: '16px 20px', borderBottom: `1px solid ${BORDER}` }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: CHARCOAL }}>Co-owner & multi-property access</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: CHARCOAL }}>Multi-property access</div>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
             One Gojo account can own or access several properties
           </div>
@@ -444,7 +474,7 @@ export function UsersRolesClient({
                 <RolePill
                   role={p.role as Row['role']}
                   label={
-                    p.role === 'OWNER' ? (multipleOwners ? 'Co-owner' : 'Owner') : undefined
+                    p.role === 'OWNER' ? (p.ownerCount > 1 ? 'Co-owner' : 'Owner') : undefined
                   }
                 />
               </div>
@@ -544,6 +574,40 @@ const input: React.CSSProperties = {
   background: '#fff',
 };
 
+// Mobile-number field — a locked +91 prefix beside a 10-digit input, matching
+// the sign-in screen and the new-reservation drawer.
+const phoneRow: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'stretch',
+  border: `1px solid ${BORDER}`,
+  borderRadius: 8,
+  overflow: 'hidden',
+  background: '#fff',
+};
+
+const phonePrefix: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  padding: '0 10px',
+  background: SOFT,
+  borderRight: `1px solid ${BORDER}`,
+  fontSize: 13,
+  fontWeight: 600,
+  color: MUTED,
+};
+
+const phoneInput: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  padding: '9px 12px',
+  border: 'none',
+  outline: 'none',
+  fontFamily: 'inherit',
+  fontSize: 13,
+  color: CHARCOAL,
+  background: 'transparent',
+};
+
 const iconBtn = (danger = false, disabled = false): React.CSSProperties => ({
   padding: '6px 12px',
   borderRadius: 6,
@@ -568,9 +632,9 @@ const btnPrimary: React.CSSProperties = {
 
 const btnGhost: React.CSSProperties = {
   padding: '8px 16px',
-  background: 'transparent',
-  color: '#5C7170',
-  border: 'none',
+  background: '#fff',
+  color: CHARCOAL,
+  border: `1px solid ${BORDER}`,
   borderRadius: 8,
   fontSize: 13,
   fontWeight: 600,

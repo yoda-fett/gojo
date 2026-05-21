@@ -17,7 +17,7 @@ const STEPS: { label: string; optional?: boolean }[] = [
   { label: 'Property profile' },
   { label: 'Room types' },
   { label: 'Rooms' },
-  { label: 'Users & Roles' },
+  { label: 'Users and Roles' },
   { label: 'Rate management' },
   { label: 'Housekeeping Catalog' },
   { label: 'Direct booking', optional: true },
