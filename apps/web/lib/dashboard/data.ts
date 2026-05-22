@@ -237,12 +237,12 @@ export async function getDashboardSnapshot(propertyId: string, role: Role, range
     chart: currentSeries,
     alerts,
     roomsNeedingAttention: rooms
-      .filter((room) => !['AVAILABLE', 'CLEAN'].includes(room.state))
+      .filter((room) => room.housekeepingStatus === 'DIRTY')
       .map((room) => ({
         roomId: room.id,
         roomNumber: room.number,
         roomType: roomTypeMap[room.roomTypeId]?.name ?? 'Room',
-        housekeepingState: room.state,
+        housekeepingState: room.housekeepingStatus,
         flaggedAt: room.updatedAt?.toISOString?.() ?? new Date().toISOString(),
       })),
   };
@@ -723,14 +723,18 @@ export async function getAlerts(propertyId: string, status: 'active' | 'all' = '
 }
 
 export async function getRoomsNeedingAttention(propertyId: string) {
-  const ATTENTION = ['DIRTY', 'CLEAN', 'OUT_OF_ORDER', 'MAINTENANCE'];
+  // Epic 15: a room needs attention when it is DIRTY or out of service.
   const [rooms, blocks, roomTypes] = await Promise.all([
     prisma.room.findMany({
-      where: { propertyId, deletedAt: null, state: { in: ATTENTION } },
+      where: { propertyId, deletedAt: null },
       orderBy: { updatedAt: 'desc' },
     }),
     prisma.roomBlock.findMany({
-      where: { propertyId, deletedAt: null, endDate: { gte: new Date() } },
+      where: {
+        propertyId,
+        deletedAt: null,
+        OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
+      },
     }),
     prisma.roomType.findMany({
       where: { propertyId, deletedAt: null },
@@ -739,20 +743,22 @@ export async function getRoomsNeedingAttention(propertyId: string) {
   ]);
   const blockMap = new Map(blocks.map((b) => [b.roomId, b]));
   const typeMap = new Map(roomTypes.map((t) => [t.id, t.name]));
-  const items = rooms.map((r) => {
-    const b = blockMap.get(r.id);
-    return {
-      roomId: r.id,
-      roomNumber: r.number,
-      roomType: typeMap.get(r.roomTypeId) ?? 'Room',
-      housekeepingState: r.state,
-      blockType: b?.blockType ?? null,
-      blockEndDate: b?.endDate ?? null,
-      blockReason: b?.reason ?? null,
-      lastUpdatedAt: r.updatedAt,
-      stateVersion: r.stateVersion,
-    };
-  });
+  const items = rooms
+    .filter((r) => r.housekeepingStatus === 'DIRTY' || blockMap.has(r.id))
+    .map((r) => {
+      const b = blockMap.get(r.id);
+      return {
+        roomId: r.id,
+        roomNumber: r.number,
+        roomType: typeMap.get(r.roomTypeId) ?? 'Room',
+        housekeepingState: r.housekeepingStatus,
+        blockType: b?.blockType ?? null,
+        blockEndDate: b?.endDate ?? null,
+        blockReason: b?.reason ?? null,
+        lastUpdatedAt: r.updatedAt,
+        stateVersion: r.stateVersion,
+      };
+    });
   return {
     count: items.length,
     items,

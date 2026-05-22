@@ -92,7 +92,6 @@ export async function listAvailability(
       const availableRooms = rooms.filter(
         (r) =>
           r.roomTypeId === rt.id &&
-          r.state === 'AVAILABLE' &&
           !occupiedRoomIds.has(r.id) &&
           !blockedRoomIds.has(r.id) &&
           (!r.holdExpiresAt || r.holdExpiresAt < now),
@@ -142,7 +141,6 @@ export async function acquireHold({
     where: {
       propertyId: property.id,
       roomTypeId,
-      state: 'AVAILABLE',
       deletedAt: null,
     },
     orderBy: { number: 'asc' },
@@ -165,12 +163,13 @@ export async function acquireHold({
   const redis = getLockRedis();
   return withRoomLock(candidate.id, redis, prisma, async (tx) => {
     const fresh = await tx.room.findUnique({ where: { id: candidate.id } });
-    if (!fresh || fresh.state !== 'AVAILABLE' || (fresh.holdExpiresAt && fresh.holdExpiresAt > now)) {
+    if (!fresh || (fresh.holdExpiresAt && fresh.holdExpiresAt > now)) {
       throw new AppError('NO_ROOMS_AVAILABLE', 'Room no longer available', 409);
     }
+    // Epic 15: a hold is the holdExpiresAt/holdRef pair — no room-state value.
     await tx.room.update({
       where: { id: candidate.id },
-      data: { state: 'HELD', holdExpiresAt, holdRef },
+      data: { holdExpiresAt, holdRef },
     });
     return {
       holdId: holdRef,
@@ -187,9 +186,11 @@ export async function acquireHold({
 /** @gateExempt Cron sweep — system context, no Owner actor. */
 export async function sweepExpiredHolds() {
   const now = new Date();
+  // Epic 15: "held" is derived from holdExpiresAt — an expired hold is already
+  // not-held the instant it lapses. This sweep is now a tidiness job that
+  // clears the stale hold columns.
   const stale = await prisma.room.findMany({
     where: {
-      state: 'HELD',
       holdExpiresAt: { lt: now },
     },
     select: { id: true, propertyId: true, holdRef: true },
@@ -198,10 +199,10 @@ export async function sweepExpiredHolds() {
   for (const room of stale) {
     await prisma.$transaction(async (tx) => {
       const fresh = await tx.room.findUnique({ where: { id: room.id } });
-      if (!fresh || fresh.state !== 'HELD' || !fresh.holdExpiresAt || fresh.holdExpiresAt >= now) return;
+      if (!fresh || !fresh.holdExpiresAt || fresh.holdExpiresAt >= now) return;
       await tx.room.update({
         where: { id: room.id },
-        data: { state: 'AVAILABLE', holdExpiresAt: null, holdRef: null },
+        data: { holdExpiresAt: null, holdRef: null },
       });
       await writeAuditLog(tx, {
         userId: 'SYSTEM',

@@ -15,6 +15,7 @@ export * from './housekeeping-logging.js';
 export * from './catalog-item.js';
 export * from './ist-calendar-day.js';
 export * from './room-assignment.js';
+export * from './room-status.js';
 export * from './scoped-client.js';
 export * from './channel-trial-lifecycle.js';
 export * from './conversion-arc-scheduler.js';

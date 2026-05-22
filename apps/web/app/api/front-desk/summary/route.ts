@@ -35,7 +35,7 @@ export const GET = withAuth(async (_req, actor) => {
       where: {
         propertyId: actor.propertyId,
         deletedAt: null,
-        state: { in: ['DIRTY', 'MAINTENANCE', 'OUT_OF_ORDER'] },
+        housekeepingStatus: 'DIRTY',
       },
     }),
   ]);

@@ -359,11 +359,6 @@ export async function getAvailableRooms(actor, input) {
       propertyId: actor.propertyId,
       roomTypeId: input.roomTypeId,
       deletedAt: null,
-      // Availability for a date range is decided by overlapping reservations
-      // below — NOT by the room's current state. An OCCUPIED room (guest in it
-      // today) is still bookable for a future range. Only genuinely
-      // un-bookable states are excluded here.
-      state: { notIn: ['OUT_OF_ORDER', 'MAINTENANCE'] },
     },
     orderBy: [{ floor: 'asc' }, { number: 'asc' }],
   });
@@ -376,8 +371,26 @@ export async function getAvailableRooms(actor, input) {
     },
   });
 
+  // Epic 15: out-of-order rooms are excluded via maintenance blocks overlapping
+  // the requested range (not a room-state value), and a room carrying a live
+  // direct-booking hold is not offered to a walk-in. Date-range availability
+  // itself is still decided purely by overlapping reservations.
+  const blocks = await prisma.roomBlock.findMany({
+    where: {
+      propertyId: actor.propertyId,
+      roomId: { in: rooms.map((room) => room.id) },
+      deletedAt: null,
+      startDate: { lte: input.checkOut },
+      OR: [{ endDate: null }, { endDate: { gte: input.checkIn } }],
+    },
+  });
+  const blockedRoomIds = new Set(blocks.map((block) => block.roomId));
+  const now = new Date();
+
   return {
     rooms: rooms
+      .filter((room) => !blockedRoomIds.has(room.id))
+      .filter((room) => !(room.holdExpiresAt && room.holdExpiresAt.getTime() > now.getTime()))
       .filter((room) =>
         !reservations.some((reservation) =>
           reservation.roomId === room.id &&
@@ -438,13 +451,8 @@ export async function createWalkInReservation(actor, input) {
     if (isSameDayWalkIn) {
       const folio = await ensureOpenFolio(tx, actor, reservation.id, guest.id);
       await postRoomCharges(tx, actor, folio.id, input.checkIn, input.checkOut, input.rate);
-      await tx.room.update({
-        where: { id: input.roomId },
-        data: {
-          state: 'OCCUPIED',
-          stateVersion: { increment: 1 },
-        },
-      });
+      // Epic 15: occupancy is derived from the CHECKED_IN reservation —
+      // nothing is written on the room itself.
     }
 
     await createReservationAudit(tx, actor, 'RESERVATION_CREATED', reservation.id, {
@@ -517,7 +525,7 @@ export async function getReservationDetail(actor, reservationId) {
       id: room?.id,
       number: room?.number ?? 'TBD',
       floor: room?.floor ?? null,
-      state: room?.state ?? 'AVAILABLE',
+      housekeepingStatus: room?.housekeepingStatus ?? 'CLEAN',
       stateVersion: room?.stateVersion ?? 0,
       roomType: roomType?.name ?? 'Room',
       roomTypeId: roomType?.id ?? reservation.roomTypeId,
@@ -628,13 +636,8 @@ export async function checkInReservation(actor, reservationId, input) {
       },
     });
 
-    await tx.room.update({
-      where: { id: current.roomId },
-      data: {
-        state: 'OCCUPIED',
-        stateVersion: { increment: 1 },
-      },
-    });
+    // Epic 15: occupancy is derived from reservation.status (CHECKED_IN) —
+    // the room row is not written on check-in.
 
     await ensureOpenFolio(tx, actor, current.id, current.guestId);
     await createReservationAudit(tx, actor, 'CHECK_IN', current.id, { idType: input.idType });
@@ -809,10 +812,11 @@ export async function checkOutReservation(actor, reservationId, input) {
       },
     });
 
+    // R1 — a checked-out room needs cleaning.
     await tx.room.update({
       where: { id: current.roomId },
       data: {
-        state: 'DIRTY',
+        housekeepingStatus: 'DIRTY',
         stateVersion: { increment: 1 },
       },
     });
@@ -1046,13 +1050,8 @@ export async function markReservationNoShow(actor, reservationId, input) {
       },
     });
 
-    await tx.room.update({
-      where: { id: current.roomId },
-      data: {
-        state: 'AVAILABLE',
-        stateVersion: { increment: 1 },
-      },
-    });
+    // Epic 15: occupancy is derived — a NO_SHOW reservation leaves the room
+    // VACANT by derivation, so the room row is not written.
 
     await createReservationAudit(tx, actor, 'NO_SHOW_MARKED', current.id, null);
     return updated;

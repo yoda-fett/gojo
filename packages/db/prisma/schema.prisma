@@ -83,7 +83,8 @@ model Room {
   roomTypeId    String   @map("room_type_id")
   number        String
   floor         Int?
-  state         String
+  housekeepingStatus    String    @default("CLEAN") @map("housekeeping_status")
+  lastCadenceMarkedDate DateTime? @db.Date @map("last_cadence_marked_date")
   holdExpiresAt DateTime? @map("hold_expires_at")
   holdRef       String?  @map("hold_ref")
   stateVersion  Int      @default(0) @map("state_version")
@@ -96,7 +97,7 @@ model Room {
   deletedBy     String?  @map("deleted_by")
 
   @@unique([propertyId, number])
-  @@index([propertyId, state])
+  @@index([propertyId, housekeepingStatus])
   @@index([propertyId, holdExpiresAt])
   @@map("rooms")
 }
@@ -858,7 +859,7 @@ model RoomBlock {
   roomId     String    @map("room_id")
   blockType  String    @map("block_type")
   startDate  DateTime  @db.Date @map("start_date")
-  endDate    DateTime  @db.Date @map("end_date")
+  endDate    DateTime? @db.Date @map("end_date")
   reason     String
   createdBy  String    @map("created_by")
   createdAt  DateTime  @default(now()) @map("created_at")

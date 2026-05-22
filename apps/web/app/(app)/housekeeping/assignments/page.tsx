@@ -38,7 +38,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
       roomId: room.id,
       roomNumber: room.number,
       roomType: roomTypeMap.get(room.roomTypeId) ?? 'Room',
-      housekeepingState: room.state,
+      housekeepingState: room.housekeepingStatus,
     };
     if (!assignment) return { type: 'unassigned' as const, ...base };
     return {

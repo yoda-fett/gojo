@@ -29,7 +29,7 @@ export async function startPaymentForHold({
   checkOut: Date;
   roomTypeId: string;
 }) {
-  const room = await prisma.room.findFirst({ where: { holdRef: holdId, state: 'HELD' } });
+  const room = await prisma.room.findFirst({ where: { holdRef: holdId } });
   if (!room) throw new AppError('HOLD_NOT_FOUND', 'Hold not found', 404);
   if (!room.holdExpiresAt || room.holdExpiresAt < new Date()) {
     throw new AppError('HOLD_EXPIRED', 'Hold has expired', 410);
@@ -168,8 +168,8 @@ export async function processPaymentWebhook({
     const result = await withRoomLock(pending.roomId, redis, prisma, async (tx) => {
       const room = await tx.room.findUnique({ where: { id: pending.roomId } });
       if (!room) throw new AppError('NOT_FOUND', 'Room not found', 404);
-      if (room.state !== 'HELD') {
-        throw new AppError('INVALID_TRANSITION', `Room not held (state=${room.state})`, 409);
+      if (!room.holdExpiresAt || room.holdExpiresAt.getTime() <= Date.now()) {
+        throw new AppError('INVALID_TRANSITION', 'Room hold has expired or was not held', 409);
       }
 
       const guest = await tx.guest.create({
@@ -209,9 +209,11 @@ export async function processPaymentWebhook({
         },
       });
 
+      // Epic 15: occupancy is derived from the CONFIRMED reservation — only
+      // the hold columns are cleared.
       await tx.room.update({
         where: { id: pending.roomId },
-        data: { state: 'OCCUPIED', holdExpiresAt: null, holdRef: null },
+        data: { holdExpiresAt: null, holdRef: null },
       });
 
       const folio = await tx.folio.create({

@@ -131,7 +131,9 @@ export async function processReservationIngest({
     if (block) {
       throw new AppError(
         'ROOM_BLOCKED',
-        `Room blocked: ${block.blockType} until ${block.endDate.toISOString().slice(0, 10)}`,
+        `Room blocked: ${block.blockType}${
+          block.endDate ? ` until ${block.endDate.toISOString().slice(0, 10)}` : ''
+        }`,
         409,
       );
     }
@@ -140,8 +142,21 @@ export async function processReservationIngest({
     const result = await withRoomLock(payload.roomId, redis, prisma, async (tx) => {
       const room = await tx.room.findUnique({ where: { id: payload.roomId } });
       if (!room) throw new AppError('NOT_FOUND', 'Room not found', 404);
-      if (room.state !== 'AVAILABLE') {
-        throw new AppError('ROOM_UNAVAILABLE', `Room state=${room.state}`, 409);
+      // Epic 15: availability for the booked range is decided by overlapping
+      // reservations — never by the room's occupancy today. A future-dated OTA
+      // booking ingests even if the room is occupied right now.
+      const conflict = await tx.reservation.findFirst({
+        where: {
+          propertyId,
+          roomId: payload.roomId,
+          deletedAt: null,
+          status: { in: ['CONFIRMED', 'CHECKED_IN'] },
+          checkIn: { lt: checkOut },
+          checkOut: { gt: checkIn },
+        },
+      });
+      if (conflict) {
+        throw new AppError('ROOM_UNAVAILABLE', 'Room already reserved for this period', 409);
       }
 
       const guest = await tx.guest.create({
@@ -172,11 +187,8 @@ export async function processReservationIngest({
         },
       });
 
-      const updatedRoom = await tx.room.update({
-        where: { id: payload.roomId },
-        data: { state: 'OCCUPIED' },
-      });
-
+      // Epic 15: occupancy is derived from the CONFIRMED reservation — the
+      // room row is not written on ingest.
       await writeAuditLog(tx, { ...SYSTEM_ACTOR, propertyId } as never, {
         action: 'CHECK_IN',
         entityType: 'RESERVATION',
@@ -184,7 +196,7 @@ export async function processReservationIngest({
         metadata: { source: 'OTA', channelId, otaRef: payload.otaRef },
       });
 
-      return { reservationId: reservation.id, bookingRef, roomId: updatedRoom.id, stateVersion: updatedRoom.stateVersion };
+      return { reservationId: reservation.id, bookingRef, roomId: room.id, stateVersion: room.stateVersion };
     });
 
     await markStatus(channelId, providerEventId, 'PROCESSED', { reservationId: result.reservationId });
@@ -258,10 +270,8 @@ export async function processCancellationIngest({
         where: { id: reservation.id },
         data: { status: 'CANCELLED', cancelledAt: new Date(), cancelReason: 'OTA_CANCELLATION' },
       });
-      const updatedRoom = await tx.room.update({
-        where: { id: reservation.roomId },
-        data: { state: 'AVAILABLE' },
-      });
+      // Epic 15: occupancy is derived — cancelling the reservation frees the room.
+      const room = await tx.room.findUnique({ where: { id: reservation.roomId } });
       await writeAuditLog(tx, { ...SYSTEM_ACTOR, propertyId } as never, {
         action: 'RESERVATION_CANCELLED',
         entityType: 'RESERVATION',
@@ -270,7 +280,7 @@ export async function processCancellationIngest({
         after: { status: 'CANCELLED', cancelReason: 'OTA_CANCELLATION' },
         metadata: { channelId, otaRef: payload.otaRef },
       });
-      return { reservationId: reservation.id, roomId: updatedRoom.id, stateVersion: updatedRoom.stateVersion };
+      return { reservationId: reservation.id, roomId: reservation.roomId, stateVersion: room?.stateVersion ?? 0 };
     });
 
     await markStatus(channelId, providerEventId, 'PROCESSED', { reservationId: result.reservationId });

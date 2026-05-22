@@ -21,8 +21,8 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   return (
     <PwaShell title={`Room ${room.number}`} nav={false}>
       <section className="hk-card" style={{ padding: 18 }}>
-        <p style={{ margin: 0, color: '#66736F', fontSize: 13 }}>Current state</p>
-        <h2 style={{ margin: '4px 0 16px', fontSize: 28 }}>{room.state}</h2>
+        <p style={{ margin: 0, color: '#66736F', fontSize: 13 }}>Housekeeping status</p>
+        <h2 style={{ margin: '4px 0 16px', fontSize: 28 }}>{room.housekeepingStatus}</h2>
         <div style={{ display: 'grid', gap: 10 }}>
           <a className="hk-button" href={`/room/${room.id}/clean`} style={{ display: 'grid', placeItems: 'center' }}>Clean task</a>
           <a className="hk-button" href={`/room/${room.id}/refill`} style={{ display: 'grid', placeItems: 'center', background: '#E7F4F1', color: '#127C69' }}>Refill task</a>

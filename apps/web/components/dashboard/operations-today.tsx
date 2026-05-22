@@ -11,7 +11,10 @@ type HousekeepingRoom = {
   roomId: string;
   roomNumber: string;
   roomTypeName: string;
-  state: string;
+  // Epic 15 composed status.
+  occupancy: 'OCCUPIED' | 'VACANT';
+  housekeeping: 'CLEAN' | 'DIRTY';
+  outOfService: { type: string; reason: string } | null;
 };
 
 type HousekeepingResponse = {
@@ -48,12 +51,12 @@ type DepartureItem = {
   status: string;
 };
 
-// State buckets for the room grid. Anything not maintenance-flavoured and not
-// occupied is treated as "vacant" — that's all the front-desk view needs.
+// State buckets for the room grid. An out-of-service room is "maint"; an
+// occupied room is "occupied"; everything else is "vacant".
 type Bucket = 'occupied' | 'vacant' | 'maint';
-function bucketFor(state: string): Bucket {
-  if (state === 'OCCUPIED') return 'occupied';
-  if (state === 'OUT_OF_ORDER' || state === 'MAINTENANCE') return 'maint';
+function bucketFor(room: HousekeepingRoom): Bucket {
+  if (room.outOfService) return 'maint';
+  if (room.occupancy === 'OCCUPIED') return 'occupied';
   return 'vacant';
 }
 
@@ -88,9 +91,9 @@ function RoomStatusCard({ propertyId }: { propertyId: string }) {
 
   const rooms = data?.rooms ?? [];
   const total = rooms.length;
-  const occupied = rooms.filter((r) => bucketFor(r.state) === 'occupied').length;
-  const vacant = rooms.filter((r) => bucketFor(r.state) === 'vacant').length;
-  const maint = rooms.filter((r) => bucketFor(r.state) === 'maint').length;
+  const occupied = rooms.filter((r) => bucketFor(r) === 'occupied').length;
+  const vacant = rooms.filter((r) => bucketFor(r) === 'vacant').length;
+  const maint = rooms.filter((r) => bucketFor(r) === 'maint').length;
   const occupancyPct = total > 0 ? Math.round((occupied / total) * 100) : 0;
 
   return (
@@ -106,7 +109,7 @@ function RoomStatusCard({ propertyId }: { propertyId: string }) {
           </div>
           <ul className="mt-4 grid grid-cols-4 gap-2.5">
             {rooms.map((room) => {
-              const bucket = bucketFor(room.state);
+              const bucket = bucketFor(room);
               const styles = BUCKET_STYLES[bucket];
               return (
                 <li

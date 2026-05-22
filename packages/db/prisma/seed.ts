@@ -35,6 +35,45 @@ function maskUrl(url: string | undefined) {
   return url.replace(/\/\/([^:]+):[^@]+@/, '//$1:***@');
 }
 
+// ─── Franchise shards ──────────────────────────────────────────────────────
+// A franchise is a conflict-free shard: owners / co-owners / managers are
+// shared within a franchise but never across it, so franchise shards can run as
+// separate — even parallel — processes without racing on the same User row.
+// Select a shard by short key, on the CLI or via SEED_FRANCHISE. No selector
+// seeds all 14 properties, so `pnpm db:seed` is unchanged.
+//   pnpm db:seed                  → all 14 properties
+//   pnpm db:seed op               → One Piece shard only
+//   pnpm db:seed mx na            → two franchises in one run
+//   SEED_FRANCHISE=jw pnpm db:seed → John Wick shard only
+const FRANCHISE_BY_KEY: Record<string, string> = {
+  op: 'One Piece',
+  ds: 'Demon Slayer',
+  na: 'Naruto',
+  jw: 'John Wick',
+  mx: 'The Matrix',
+};
+
+/** Resolve franchise full-names from CLI args (preferred) or SEED_FRANCHISE. Empty = all. */
+function resolveFranchises(): string[] {
+  const fromArgs = process.argv.slice(2);
+  const fromEnv = (process.env.SEED_FRANCHISE ?? '').split(',');
+  const keys = (fromArgs.length > 0 ? fromArgs : fromEnv)
+    .map((k) => k.trim().toLowerCase())
+    .filter(Boolean);
+
+  const franchises: string[] = [];
+  for (const key of keys) {
+    const franchise = FRANCHISE_BY_KEY[key];
+    if (!franchise) {
+      throw new Error(
+        `Unknown franchise key '${key}'. Valid keys: ${Object.keys(FRANCHISE_BY_KEY).join(', ')}.`,
+      );
+    }
+    if (!franchises.includes(franchise)) franchises.push(franchise);
+  }
+  return franchises;
+}
+
 // Anime-only seed. The single source of demo data is seedAnimeProperties() —
 // nine themed properties (One Piece / Demon Slayer / Naruto) spanning all three
 // subscription tiers and three hill-station cities (Darjeeling, Gangtok,
@@ -48,7 +87,14 @@ async function main() {
     throw new Error('DATABASE_URL is not set — refusing to run seed against an unknown DB');
   }
 
-  await seedAnimeProperties(prisma);
+  const franchises = resolveFranchises();
+  if (franchises.length > 0) {
+    console.log(`[seed] Franchise shard: ${franchises.join(', ')}`);
+    await seedAnimeProperties(prisma, { franchises });
+  } else {
+    console.log('[seed] Seeding all 14 properties');
+    await seedAnimeProperties(prisma);
+  }
 }
 
 main()

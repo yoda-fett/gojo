@@ -19,11 +19,11 @@ describe('scopedClient', () => {
     } as never;
 
     const client = scopedClient({ propertyId: 'property-1', role: 'OWNER', userId: 'user-1' }, tx);
-    await client.room.findMany({ where: { state: 'AVAILABLE' } });
+    await client.room.findMany({ where: { housekeepingStatus: 'CLEAN' } });
 
     expect(findMany).toHaveBeenCalledWith({
       where: {
-        state: 'AVAILABLE',
+        housekeepingStatus: 'CLEAN',
         propertyId: 'property-1',
         deletedAt: null,
       },
@@ -51,9 +51,9 @@ describe('scopedClient', () => {
     } as never;
 
     const client = scopedClient({ propertyId: 'property-1', role: 'OWNER', userId: 'user-1' }, tx);
-    await client.room.update({ where: { id: 'room-1' }, data: { state: 'OCCUPIED' } });
+    await client.room.update({ where: { id: 'room-1' }, data: { housekeepingStatus: 'DIRTY' } });
 
     expect(findUnique).toHaveBeenCalledWith({ where: { id: 'room-1' } });
-    expect(update).toHaveBeenCalledWith({ where: { id: 'room-1' }, data: { state: 'OCCUPIED' } });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'room-1' }, data: { housekeepingStatus: 'DIRTY' } });
   });
 });

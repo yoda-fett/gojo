@@ -3,9 +3,11 @@ import { checkSubscriptionGate, prisma, writeAuditLog } from '@gojo/db';
 import { AppError } from '@gojo/types';
 import { startOfDay } from 'date-fns';
 
-import { transitionRoomState } from './room-state';
-
-const BLOCKABLE_FROM_STATES = new Set(['AVAILABLE', 'DIRTY', 'CLEAN']);
+// Epic 15 — out-of-order / maintenance are modelled purely as RoomBlock rows.
+// A block carries a duration (open-ended when endDate is null) and a reason,
+// and overrides the room's *display* status via precedence. It never writes
+// the room's housekeeping or occupancy axes. When a block lifts — manually or
+// via the expiry sweep — the room is marked DIRTY (Rule R4: a pre-resale clean).
 
 export async function createRoomBlock({
   actor,
@@ -19,11 +21,11 @@ export async function createRoomBlock({
   roomId: string;
   blockType: 'OUT_OF_ORDER' | 'MAINTENANCE';
   startDate: Date;
-  endDate: Date;
+  endDate: Date | null;
   reason: string;
 }) {
   await checkSubscriptionGate(actor, 'room.createBlock', prisma);
-  if (endDate < startDate) {
+  if (endDate && endDate < startDate) {
     throw new AppError('VALIDATION_ERROR', 'endDate must be on or after startDate', 400);
   }
 
@@ -32,9 +34,6 @@ export async function createRoomBlock({
   });
   if (!room) throw new AppError('NOT_FOUND', 'Room not found', 404);
 
-  const today = startOfDay(new Date());
-  const blockStartsToday = startOfDay(startDate).getTime() <= today.getTime();
-
   return prisma.$transaction(async (tx) => {
     const block = await tx.roomBlock.create({
       data: {
@@ -42,29 +41,24 @@ export async function createRoomBlock({
         roomId,
         blockType,
         startDate: startOfDay(startDate),
-        endDate: startOfDay(endDate),
+        endDate: endDate ? startOfDay(endDate) : null,
         reason,
         createdBy: actor.userId,
       },
     });
 
-    if (blockStartsToday && BLOCKABLE_FROM_STATES.has(room.state)) {
-      await transitionRoomState(tx, actor, {
-        roomId,
-        expectedStateVersion: room.stateVersion,
-        fromState: room.state,
-        toState: blockType,
-        action: 'ROOM_BLOCKED',
-        metadata: { blockId: block.id, reason, endDate: block.endDate.toISOString() },
-      });
-    } else {
-      await writeAuditLog(tx, actor as never, {
-        action: 'ROOM_BLOCKED',
-        entityType: 'ROOM',
-        entityId: roomId,
-        metadata: { blockId: block.id, blockType, startDate: block.startDate.toISOString(), endDate: block.endDate.toISOString(), reason },
-      });
-    }
+    await writeAuditLog(tx, actor as never, {
+      action: 'ROOM_BLOCKED',
+      entityType: 'ROOM',
+      entityId: roomId,
+      metadata: {
+        blockId: block.id,
+        blockType,
+        startDate: block.startDate.toISOString(),
+        endDate: block.endDate ? block.endDate.toISOString() : null,
+        reason,
+      },
+    });
 
     return block;
   });
@@ -92,23 +86,18 @@ export async function liftRoomBlock({
       data: { deletedAt: new Date(), deletedBy: actor.userId },
     });
 
-    if (room.state === block.blockType) {
-      await transitionRoomState(tx, actor, {
-        roomId: room.id,
-        expectedStateVersion: room.stateVersion,
-        fromState: room.state,
-        toState: 'AVAILABLE',
-        action: 'ROOM_BLOCK_LIFTED',
-        metadata: { blockId },
-      });
-    } else {
-      await writeAuditLog(tx, actor as never, {
-        action: 'ROOM_BLOCK_LIFTED',
-        entityType: 'ROOM',
-        entityId: room.id,
-        metadata: { blockId, currentState: room.state },
-      });
-    }
+    // R4 — a room returning from out-of-order needs a clean before resale.
+    await tx.room.update({
+      where: { id: room.id },
+      data: { housekeepingStatus: 'DIRTY', stateVersion: { increment: 1 } },
+    });
+
+    await writeAuditLog(tx, actor as never, {
+      action: 'ROOM_BLOCK_LIFTED',
+      entityType: 'ROOM',
+      entityId: room.id,
+      metadata: { blockId, housekeepingStatus: 'DIRTY' },
+    });
 
     return { ok: true };
   });
@@ -121,7 +110,9 @@ export async function listActiveBlocksForRooms(propertyId: string, roomIds: stri
       propertyId,
       roomId: { in: roomIds },
       deletedAt: null,
-      endDate: { gte: startOfDay(new Date()) },
+      // An active block covers today: started on/before today, and either
+      // open-ended (endDate null) or not yet ended.
+      OR: [{ endDate: null }, { endDate: { gte: startOfDay(new Date()) } }],
     },
   });
 }
@@ -132,7 +123,8 @@ export async function isRoomBlockedForRange(roomId: string, checkIn: Date, check
       roomId,
       deletedAt: null,
       startDate: { lte: checkOut },
-      endDate: { gte: checkIn },
+      // Open-ended blocks (endDate null) overlap any range starting after them.
+      OR: [{ endDate: null }, { endDate: { gte: checkIn } }],
     },
   });
   return overlapping ?? null;
@@ -141,6 +133,7 @@ export async function isRoomBlockedForRange(roomId: string, checkIn: Date, check
 /** @gateExempt Cron sweep — system context, no Owner actor. */
 export async function sweepExpiredBlocks() {
   const today = startOfDay(new Date());
+  // Open-ended blocks (endDate null) never auto-expire — `lt` excludes nulls.
   const expired = await prisma.roomBlock.findMany({
     where: { endDate: { lt: today }, deletedAt: null },
   });
@@ -153,20 +146,21 @@ export async function sweepExpiredBlocks() {
         where: { id: block.id },
         data: { deletedAt: new Date(), deletedBy: 'SYSTEM' },
       });
-      if (room.state === block.blockType) {
-        await transitionRoomState(
-          tx,
-          { userId: 'SYSTEM', propertyId: room.propertyId, role: 'SYSTEM' },
-          {
-            roomId: room.id,
-            expectedStateVersion: room.stateVersion,
-            fromState: room.state,
-            toState: 'AVAILABLE',
-            action: 'ROOM_BLOCK_EXPIRED',
-            metadata: { blockId: block.id },
-          },
-        );
-      }
+      // R4 — pre-resale clean once the block lifts.
+      await tx.room.update({
+        where: { id: room.id },
+        data: { housekeepingStatus: 'DIRTY', stateVersion: { increment: 1 } },
+      });
+      await writeAuditLog(
+        tx,
+        { userId: 'SYSTEM', propertyId: room.propertyId, role: 'SYSTEM' } as never,
+        {
+          action: 'ROOM_BLOCK_EXPIRED',
+          entityType: 'ROOM',
+          entityId: room.id,
+          metadata: { blockId: block.id, housekeepingStatus: 'DIRTY' },
+        },
+      );
     });
   }
   return expired.length;

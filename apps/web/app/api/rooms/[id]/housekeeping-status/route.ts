@@ -9,7 +9,7 @@ import { transitionRoomState } from '@/lib/services/room-state';
 import { publishSseEvent } from '@/lib/services/sse-publisher';
 
 const schema = z.object({
-  toState: z.enum(['AVAILABLE', 'OCCUPIED', 'DIRTY', 'CLEAN', 'OUT_OF_ORDER', 'MAINTENANCE']),
+  toState: z.enum(['CLEAN', 'DIRTY']),
   stateVersion: z.number().int().nonnegative(),
 });
 
@@ -30,14 +30,14 @@ export async function PATCH(req: Request, context: Context) {
         return NextResponse.json({ code: 'NOT_FOUND', message: 'Room not found' }, { status: 404 });
       }
 
-      assertHousekeepingTransition(room.state, body.toState, actor.role);
+      assertHousekeepingTransition(room.housekeepingStatus, body.toState, actor.role);
 
       const mutate = async () => {
         await prisma.$transaction(async (tx) => {
         await transitionRoomState(tx, actor, {
           roomId: id,
           expectedStateVersion: body.stateVersion,
-          fromState: room.state,
+          fromState: room.housekeepingStatus,
           toState: body.toState,
           action: 'HOUSEKEEPING_STATUS_UPDATED',
           metadata: { roomId: id },

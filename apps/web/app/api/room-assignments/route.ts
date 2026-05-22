@@ -64,7 +64,7 @@ export const GET = withAuth(async (req, actor) => {
       roomId: room.id,
       roomNumber: room.number,
       roomType: roomTypeMap.get(room.roomTypeId) ?? 'Room',
-      housekeepingState: room.state,
+      housekeepingState: room.housekeepingStatus,
     };
     if (!assignment) return { kind: 'unassigned' as const, ...base };
     return {

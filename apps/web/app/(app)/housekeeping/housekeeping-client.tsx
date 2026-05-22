@@ -6,17 +6,21 @@ import { useState } from 'react';
 import { PageHeader } from '@/components/layout/page-header';
 import { PageShell } from '@/components/layout/page-shell';
 
+// Epic 15: rows carry composed status — `display` (the primary token),
+// `housekeeping` (the stored CLEAN/DIRTY axis), and `outOfService` (an active
+// block). The owner can toggle the housekeeping axis; occupancy and
+// out-of-service are derived and read-only here.
 interface HousekeepingRow {
   roomId: string;
   roomNumber: string;
   roomTypeName: string;
-  state: string;
+  display: string;
+  housekeeping: 'CLEAN' | 'DIRTY';
+  occupancy: 'OCCUPIED' | 'VACANT';
+  outOfService: { type: string; reason: string; from: string; to: string | null } | null;
   stateVersion: number;
   priority: 'high' | 'med' | 'low';
   reason: string;
-  blockId: string | null;
-  blockType: string | null;
-  blockEndDate: string | null;
   lastUpdatedAt: string;
 }
 
@@ -32,7 +36,7 @@ interface HousekeepingResponse {
 }
 
 // TODO: re-add { key: 'in-progress', label: 'In Progress' } when the housekeeping
-// state machine tracks an active-cleaning state (matching counts.inProgress in
+// flow tracks an active-cleaning state (matching counts.inProgress in
 // /api/housekeeping). Today both the filter and the KPI would always be empty.
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -43,21 +47,23 @@ const FILTERS = [
 
 type FilterKey = (typeof FILTERS)[number]['key'];
 
-const STATE_BADGE: Record<string, { label: string; bg: string; text: string }> = {
-  DIRTY: { label: '✦ Dirty', bg: 'bg-amber-100', text: 'text-amber-800' },
-  CLEAN: { label: '✓ Clean', bg: 'bg-emerald-100', text: 'text-emerald-800' },
+// Primary chip — keyed by the composed `display` token.
+const DISPLAY_BADGE: Record<string, { label: string; bg: string; text: string }> = {
+  DIRTY: { label: '✦ Needs Cleaning', bg: 'bg-amber-100', text: 'text-amber-800' },
   AVAILABLE: { label: '◯ Available', bg: 'bg-slate-100', text: 'text-slate-700' },
-  OCCUPIED: { label: '● In House', bg: 'bg-teal-100', text: 'text-teal-800' },
-  HELD: { label: '◆ Held', bg: 'bg-slate-100', text: 'text-slate-700' },
+  IN_HOUSE: { label: '● In-House', bg: 'bg-teal-100', text: 'text-teal-800' },
+  DEPARTING: { label: '↑ Departing', bg: 'bg-orange-100', text: 'text-orange-800' },
+  ARRIVING: { label: '↓ Arriving', bg: 'bg-amber-100', text: 'text-amber-800' },
+  HELD: { label: '◷ Held', bg: 'bg-slate-100', text: 'text-slate-700' },
   OUT_OF_ORDER: { label: '✕ Out of Order', bg: 'bg-red-100', text: 'text-red-700' },
   MAINTENANCE: { label: '⚒ Maintenance', bg: 'bg-amber-100', text: 'text-amber-800' },
 };
 
 function passesFilter(row: HousekeepingRow, filter: FilterKey) {
   if (filter === 'all') return true;
-  if (filter === 'to-clean') return row.state === 'DIRTY';
-  if (filter === 'clean') return row.state === 'CLEAN' || row.state === 'AVAILABLE';
-  if (filter === 'oor') return row.state === 'OUT_OF_ORDER' || row.state === 'MAINTENANCE';
+  if (filter === 'to-clean') return row.housekeeping === 'DIRTY' && !row.outOfService;
+  if (filter === 'clean') return row.housekeeping === 'CLEAN' && !row.outOfService;
+  if (filter === 'oor') return !!row.outOfService;
   return true;
 }
 
@@ -85,8 +91,8 @@ export function HousekeepingClient() {
         body: JSON.stringify({ toState, stateVersion: row.stateVersion }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data.message ?? 'Update failed');
+        const body = await res.json().catch(() => ({}));
+        alert(body.message ?? 'Update failed');
         return;
       }
       await queryClient.invalidateQueries({ queryKey: ['housekeeping'] });
@@ -95,11 +101,12 @@ export function HousekeepingClient() {
     }
   }
 
+  // Epic 15: the housekeeping axis is a CLEAN/DIRTY toggle. Out-of-service
+  // rooms are managed via room blocks, not from this view.
   function actionLabel(row: HousekeepingRow): { label: string; toState: string } | null {
-    if (row.state === 'DIRTY') return { label: 'Mark Clean', toState: 'CLEAN' };
-    if (row.state === 'CLEAN') return { label: 'Mark Available', toState: 'AVAILABLE' };
-    if (row.state === 'AVAILABLE') return { label: 'Mark Dirty', toState: 'DIRTY' };
-    return null;
+    if (row.outOfService) return null;
+    if (row.housekeeping === 'DIRTY') return { label: 'Mark Clean', toState: 'CLEAN' };
+    return { label: 'Mark Dirty', toState: 'DIRTY' };
   }
 
   const rows = (data?.rooms ?? []).filter((r) => passesFilter(r, filter));
@@ -109,22 +116,13 @@ export function HousekeepingClient() {
 
   return (
     <PageShell
-      header={
-        <PageHeader
-          variant="list"
-          title="Housekeeping"
-          subtitle={dateStr}
-        />
-      }
+      header={<PageHeader variant="list" title="Housekeeping" subtitle={dateStr} />}
     >
-      {/* TODO: re-add the "In Progress" KpiCard once the housekeeping state
-          machine tracks an active-cleaning state (counts.inProgress is hardcoded
-          to 0 in /api/housekeeping today). */}
       <section className="grid grid-cols-4 gap-3">
         <KpiCard label="Total Rooms" value={counts.total} sub="Property" />
         <KpiCard label="Needs Cleaning" value={counts.needsCleaning} sub="Priority queue" tone="amber" />
         <KpiCard label="Clean & Ready" value={counts.cleanReady} sub="Available" tone="teal" />
-        <KpiCard label="Out of Order" value={counts.outOfOrder} sub="Maintenance" tone="coral" />
+        <KpiCard label="Out of Order" value={counts.outOfOrder} sub="Blocked" tone="coral" />
       </section>
 
       <div className="mt-5 flex items-center gap-3">
@@ -147,34 +145,45 @@ export function HousekeepingClient() {
 
       <section className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         {rows.map((row) => {
-          const badge = STATE_BADGE[row.state] ?? { label: row.state, bg: 'bg-slate-100', text: 'text-slate-700' };
+          const badge = DISPLAY_BADGE[row.display] ?? { label: row.display, bg: 'bg-slate-100', text: 'text-slate-700' };
           const action = actionLabel(row);
-          const cardBorder =
-            row.state === 'DIRTY'
+          // The housekeeping badge is shown alongside the primary chip for
+          // occupied rooms (where the chip is occupancy, not cleanliness).
+          const showHk = ['IN_HOUSE', 'DEPARTING', 'ARRIVING', 'HELD'].includes(row.display);
+          const cardBorder = row.outOfService
+            ? 'border-red-300'
+            : row.housekeeping === 'DIRTY'
               ? 'border-amber-300'
-              : row.state === 'OUT_OF_ORDER'
-                ? 'border-red-300'
-                : row.state === 'CLEAN'
-                  ? 'border-slate-200'
-                  : 'border-slate-200';
+              : 'border-slate-200';
 
           return (
             <article key={row.roomId} className={`overflow-hidden rounded-xl border-[1.5px] bg-white ${cardBorder}`}>
               <div className="px-4 pb-3 pt-4">
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="text-xl font-bold text-slate-900">{row.roomNumber}</div>
                     <div className="text-xs text-slate-500">{row.roomTypeName}</div>
                   </div>
-                  <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold ${badge.bg} ${badge.text}`}>
-                    {badge.label}
-                  </span>
+                  <div className="flex flex-wrap items-center justify-end gap-1">
+                    <span className={`inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold ${badge.bg} ${badge.text}`}>
+                      {badge.label}
+                    </span>
+                    {showHk ? (
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                          row.housekeeping === 'DIRTY' ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {row.housekeeping === 'DIRTY' ? '⚠ Dirty' : '✓ Clean'}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-                <PriorityRow priority={row.priority} state={row.state} />
+                <PriorityRow priority={row.priority} outOfService={!!row.outOfService} />
                 {row.reason ? <p className="mt-2 text-xs text-slate-600">{row.reason}</p> : null}
-                {row.blockEndDate ? (
+                {row.outOfService?.to ? (
                   <p className="mt-1 text-[11px] text-red-600">
-                    Estimated resolve: {new Date(row.blockEndDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                    Estimated resolve: {new Date(row.outOfService.to).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                   </p>
                 ) : null}
               </div>
@@ -235,12 +244,12 @@ function KpiCard({
   );
 }
 
-function PriorityRow({ priority, state }: { priority: 'high' | 'med' | 'low'; state: string }) {
-  if (state === 'OUT_OF_ORDER' || state === 'MAINTENANCE') {
+function PriorityRow({ priority, outOfService }: { priority: 'high' | 'med' | 'low'; outOfService: boolean }) {
+  if (outOfService) {
     return (
       <div className="mt-2 flex items-center gap-1.5">
         <span className="h-2 w-2 rounded-full bg-red-500" />
-        <span className="text-[11px] font-semibold text-red-600">Maintenance</span>
+        <span className="text-[11px] font-semibold text-red-600">Out of service</span>
       </div>
     );
   }

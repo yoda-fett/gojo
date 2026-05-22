@@ -2167,25 +2167,8 @@ async function seedRateMultipliers(prisma: PrismaClient, theme: ThemeDef): Promi
   }
 }
 
-/** Optional shard filter for {@link seedAnimeProperties}. */
-export interface SeedFilter {
-  /** Restrict the run to these franchises (full names, e.g. 'One Piece'). Omitted/empty = all 14 properties. */
-  franchises?: string[];
-}
-
-export async function seedAnimeProperties(
-  prisma: PrismaClient,
-  filter?: SeedFilter,
-): Promise<void> {
-  const allThemes = buildThemes();
-  const wanted = filter?.franchises ?? [];
-  // Franchise is a conflict-free shard boundary: owners/co-owners/managers are
-  // shared within a franchise but never across, so a franchise shard owns every
-  // row it writes. An empty filter seeds all 14 properties.
-  const themes = wanted.length > 0 ? allThemes.filter((t) => wanted.includes(t.franchise)) : allThemes;
-  if (themes.length === 0) {
-    throw new Error(`[seed:anime] No properties match franchise filter: ${wanted.join(', ') || '(empty)'}`);
-  }
+export async function seedAnimeProperties(prisma: PrismaClient): Promise<void> {
+  const themes = buildThemes();
 
   for (const theme of themes) {
     const owners = [theme.owner, ...theme.coOwners].map((o) => o.name).join(' + ');

@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { roomCardStatus, statusChipLabel, taskChipLabel } from './room-display';
 
 describe('roomCardStatus', () => {
-  it('maps AVAILABLE to done', () => {
-    expect(roomCardStatus('AVAILABLE')).toBe('done');
+  // Epic 15: the stored cleanliness axis is housekeepingStatus (CLEAN | DIRTY).
+  it('maps CLEAN to done', () => {
+    expect(roomCardStatus('CLEAN')).toBe('done');
   });
 
   it('maps DIRTY to in-progress', () => {
@@ -12,7 +13,7 @@ describe('roomCardStatus', () => {
   });
 
   it('maps other states to pending', () => {
-    expect(roomCardStatus('CLEAN')).toBe('pending');
+    expect(roomCardStatus('OCCUPIED')).toBe('pending');
   });
 });
 

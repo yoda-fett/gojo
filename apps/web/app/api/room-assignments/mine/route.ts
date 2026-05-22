@@ -40,7 +40,7 @@ export const GET = withAuth(async (req, actor) => {
     roomId: room.id,
     roomNumber: room.number,
     roomType: roomTypeMap.get(room.roomTypeId) ?? 'Room',
-    housekeepingState: room.state,
+    housekeepingState: room.housekeepingStatus,
     stateVersion: room.stateVersion,
     taskTypes: assignmentMap.get(room.id)?.taskTypes ?? [],
   }));

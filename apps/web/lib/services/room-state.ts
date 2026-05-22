@@ -5,7 +5,9 @@ import { AppError } from '@gojo/types';
 import type { Prisma } from '@gojo/db/generated/client';
 
 /**
- * Atomic room state transition with optimistic concurrency.
+ * Atomic housekeeping-status transition with optimistic concurrency.
+ * Epic 15: `stateVersion` now guards the `housekeepingStatus` axis only —
+ * `toState` / `fromState` carry CLEAN | DIRTY values.
  * Throws CONFLICT if `expectedStateVersion` does not match the current row.
  *
  * @gateExempt Internal helper — gate is enforced by the calling service.
@@ -31,7 +33,7 @@ export async function transitionRoomState(
         deletedAt: null,
       },
       data: {
-        state: params.toState,
+        housekeepingStatus: params.toState,
         stateVersion: { increment: 1 },
       },
     })
@@ -51,8 +53,8 @@ export async function transitionRoomState(
     entityId: params.roomId,
     fromState: params.fromState,
     toState: params.toState,
-    before: { state: params.fromState, stateVersion: params.expectedStateVersion },
-    after: { state: params.toState, stateVersion: params.expectedStateVersion + 1 },
+    before: { housekeepingStatus: params.fromState, stateVersion: params.expectedStateVersion },
+    after: { housekeepingStatus: params.toState, stateVersion: params.expectedStateVersion + 1 },
     metadata: params.metadata as never,
   });
 }

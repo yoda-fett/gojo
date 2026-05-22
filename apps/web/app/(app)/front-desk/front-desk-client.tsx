@@ -23,8 +23,14 @@ interface RoomGridResponse {
     rooms: Array<{
       roomId: string;
       roomNumber: string;
-      state: string;
       stateVersion: number;
+      // Composed status (Epic 15).
+      display: string;
+      housekeeping: 'CLEAN' | 'DIRTY';
+      occupancy: 'OCCUPIED' | 'VACANT';
+      held: boolean;
+      reserved: boolean;
+      outOfService: { type: string; reason: string; from: string; to: string | null } | null;
       guestName: string | null;
       reservationId: string | null;
       bookingReference: string | null;
@@ -32,7 +38,6 @@ interface RoomGridResponse {
       checkOut: string | null;
       nightNumber: number | null;
       totalNights: number | null;
-      visualState: string;
       lastGuestName: string | null;
       lastCheckOut: string | null;
       nextArrivalGuestName: string | null;
@@ -314,6 +319,19 @@ const ROOM_TILE_STYLES: Record<string, RoomTileStyle> = {
   },
 };
 
+// Epic 15: the room-grid API returns the composed `display` token; map it to
+// the tile style key. Housekeeping (CLEAN/DIRTY) renders as a separate badge.
+const DISPLAY_TO_STYLE: Record<string, string> = {
+  IN_HOUSE: 'in_house',
+  DEPARTING: 'departing',
+  ARRIVING: 'arriving',
+  HELD: 'held',
+  AVAILABLE: 'vacant_clean',
+  DIRTY: 'dirty',
+  OUT_OF_ORDER: 'out_of_order',
+  MAINTENANCE: 'maintenance',
+};
+
 function formatDayMonth(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -443,68 +461,69 @@ function RoomTile({
   room: RoomGridResponse['groups'][number]['rooms'][number];
   roomTypeName: string;
 }) {
-  const style = ROOM_TILE_STYLES[room.visualState] ?? ROOM_TILE_STYLES.vacant_clean!;
+  // Epic 15: map the composed `display` token to the tile style; housekeeping
+  // renders as a separate always-on badge for occupied/held rooms.
+  const vs = DISPLAY_TO_STYLE[room.display] ?? 'vacant_clean';
+  const style = ROOM_TILE_STYLES[vs] ?? ROOM_TILE_STYLES.vacant_clean!;
   const href = room.reservationId ? `/reservations/${room.reservationId}` : '#';
   const isClickable = !!room.reservationId;
 
+  // The housekeeping badge adds non-redundant info only where the primary chip
+  // is occupancy/timeline. For vacant tiles the chip already states cleanliness;
+  // an active block overrides it entirely.
+  const showHkBadge = ['in_house', 'departing', 'arriving', 'held'].includes(vs);
+  const hkDirty = room.housekeeping === 'DIRTY';
+
   // Top-right "Night X of Y" / "Departing" label varies by state.
   const cornerLabel = (() => {
-    if (room.visualState === 'in_house' && room.nightNumber && room.totalNights) {
+    if (vs === 'in_house' && room.nightNumber && room.totalNights) {
       return `Night ${room.nightNumber} of ${room.totalNights}`;
     }
-    if (room.visualState === 'departing') return 'Departing';
+    if (vs === 'departing') return 'Departing';
     return null;
   })();
 
   // Bottom block — name + booking ref + date line. Varies by state.
   const bottomPrimary = (() => {
     if (room.guestName) return room.guestName;
-    if (room.visualState === 'out_of_order' || room.visualState === 'maintenance') return 'Maintenance';
-    if (room.visualState === 'dirty') return 'Vacant';
-    if (room.visualState === 'vacant_clean') return 'Available';
-    if (room.visualState === 'held') return 'On Hold';
+    if (vs === 'out_of_order' || vs === 'maintenance') return 'Blocked';
+    if (vs === 'dirty') return 'Vacant';
+    if (vs === 'vacant_clean') return 'Available';
+    if (vs === 'held') return 'On Hold';
     return '—';
   })();
 
   const bottomSecondary = (() => {
-    if (room.bookingReference && room.checkOut && room.visualState === 'in_house') {
+    if (room.bookingReference && room.checkOut && vs === 'in_house') {
       return `Check-out ${formatDayMonth(room.checkOut)} · ${room.bookingReference}`;
     }
-    if (room.bookingReference && room.visualState === 'departing') {
+    if (room.bookingReference && vs === 'departing') {
       return `Check-out today · ${room.bookingReference}`;
     }
-    if (room.bookingReference && room.visualState === 'arriving') {
+    if (room.bookingReference && vs === 'arriving') {
       const eta = formatEta(room.checkIn);
       return `${eta ?? 'Check-in Today'} · ${room.bookingReference}`;
     }
     // Dirty room with an active/incoming reservation — next guest arriving.
-    // ETA from the reservation's check-in time when present, else generic
-    // "Check-in Today" copy.
-    if (room.bookingReference && room.visualState === 'dirty') {
+    if (room.bookingReference && vs === 'dirty') {
       const eta = formatEta(room.checkIn);
       return `${eta ?? 'ETA not set'} · ${room.bookingReference}`;
     }
-    // Dirty room with no incoming reservation — surface the last departed
-    // guest so front-desk staff have context on who just left.
-    if (room.visualState === 'dirty' && room.lastGuestName) {
+    // Dirty room with no incoming reservation — surface the last departed guest.
+    if (vs === 'dirty' && room.lastGuestName) {
       return `Last: ${room.lastCheckOut ? `${formatDayMonth(room.lastCheckOut)}` : ''} · ${room.lastGuestName}`;
     }
-    // Clean room with a future arrival — show the next guest landing so
-    // front-desk staff can pre-empt prep work.
-    if (
-      room.visualState === 'vacant_clean' &&
-      room.nextArrivalCheckIn &&
-      room.nextArrivalGuestName
-    ) {
-      return `Next Arrival: ${formatDayMonth(room.nextArrivalCheckIn)} · ${room.nextArrivalGuestName}`;
+    // Clean room with a future arrival — show the next guest landing.
+    if (vs === 'vacant_clean' && room.nextArrivalCheckIn && room.nextArrivalGuestName) {
+      return `Next: ${formatDayMonth(room.nextArrivalCheckIn)} · ${room.nextArrivalGuestName}`;
     }
     // Held / on-hold (transient booking lock).
-    if (room.visualState === 'held') {
+    if (vs === 'held') {
       return room.bookingReference ? `Awaiting confirmation · ${room.bookingReference}` : 'Awaiting confirmation';
     }
-    // Out-of-order or under maintenance — show why if we ever have a reason.
-    if (room.visualState === 'out_of_order' || room.visualState === 'maintenance') {
-      return 'Not bookable';
+    // Out-of-order or under maintenance — show the block reason if present.
+    if (vs === 'out_of_order' || vs === 'maintenance') {
+      return room.outOfService?.reason ?? 'Not bookable';
     }
     return null;
   })();
@@ -529,10 +548,21 @@ function RoomTile({
         ) : null}
       </div>
 
-      <span className={`mt-3 inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-[11.5px] font-semibold ${style.pill}`}>
-        <span className="text-[12px] leading-none">{style.pillIcon}</span>
-        {style.pillLabel}
-      </span>
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <span className={`inline-flex items-center gap-1.5 rounded-[6px] px-2 py-1 text-[11.5px] font-semibold ${style.pill}`}>
+          <span className="text-[12px] leading-none">{style.pillIcon}</span>
+          {style.pillLabel}
+        </span>
+        {showHkBadge ? (
+          <span
+            className={`inline-flex items-center gap-1 rounded-[6px] px-1.5 py-1 text-[10.5px] font-semibold ${
+              hkDirty ? 'bg-[#FBEFC9] text-[#8a6610]' : 'bg-[#EEF2F1] text-[var(--color-mid-gray)]'
+            }`}
+          >
+            {hkDirty ? '⚠ Dirty' : '✓ Clean'}
+          </span>
+        ) : null}
+      </div>
 
       <div className="mt-3">
         <div className={`truncate text-[13.5px] font-semibold ${style.primary}`}>{bottomPrimary}</div>
@@ -580,7 +610,7 @@ function RoomListView({ groups, groupBy }: { groups: RoomGridResponse['groups'];
               </tr>
             ) : null}
             {s.rooms.map((r) => {
-              const v = visualDot(r.visualState);
+              const v = visualDot(DISPLAY_TO_STYLE[r.display] ?? 'vacant_clean');
               return (
                 <tr key={r.roomId} className="border-t border-slate-100">
                   <td className="px-3 py-2 font-semibold">{r.roomNumber}</td>
