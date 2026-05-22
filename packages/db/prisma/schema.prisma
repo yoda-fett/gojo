@@ -38,6 +38,7 @@ model Property {
   numberOfFloors       Int?     @map("number_of_floors")
   defaultCheckInTime   String?  @map("default_check_in_time")  @db.VarChar(5) // "HH:MM" 24h
   defaultCheckOutTime  String?  @map("default_check_out_time") @db.VarChar(5) // "HH:MM" 24h
+  routineCleaningIntervalDays Int @default(3) @map("routine_cleaning_interval_days") // R3 cadence — days between routine cleans of a vacant room
   contactPhone         String?  @map("contact_phone")  @db.VarChar(20)
   contactEmail         String?  @map("contact_email")  @db.VarChar(120)
   pan                  String?  @map("pan")            @db.VarChar(10)

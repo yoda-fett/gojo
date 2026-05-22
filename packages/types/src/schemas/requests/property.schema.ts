@@ -30,6 +30,13 @@ export const propertyProfileUpdateSchema = z.object({
   numberOfFloors: z.number().int().min(1).max(50).optional().nullable(),
   defaultCheckInTime: z.string().regex(TIME_OF_DAY_RE, 'Expected HH:MM (24-hour)').optional().nullable(),
   defaultCheckOutTime: z.string().regex(TIME_OF_DAY_RE, 'Expected HH:MM (24-hour)').optional().nullable(),
+  // Housekeeping cadence (Story 15.6) — drives R3 routine cleaning of vacant rooms.
+  routineCleaningIntervalDays: z
+    .number()
+    .int()
+    .min(1, 'Interval must be at least 1 day')
+    .max(90, 'Interval must be 90 days or fewer')
+    .optional(),
   // Laundry vendor (existing — Epic 11)
   laundryVendorName: z.string().trim().min(1).max(80).optional(),
   laundryVendorContact: z.string().trim().max(120).optional().nullable(),

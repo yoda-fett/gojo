@@ -82,10 +82,19 @@ type PropertyData = {
   numberOfFloors: number | null;
   defaultCheckInTime: string | null;
   defaultCheckOutTime: string | null;
+  routineCleaningIntervalDays: number;
 };
 
 type FieldType = 'text' | 'email' | 'time' | 'number';
-type FieldDef = { key: keyof PropertyData; label: string; type?: FieldType; placeholder?: string };
+type FieldDef = {
+  key: keyof PropertyData;
+  label: string;
+  type?: FieldType;
+  placeholder?: string;
+  helper?: string;
+  min?: number;
+  max?: number;
+};
 
 type Policy = {
   id: string;
@@ -169,8 +178,13 @@ function PatchCard({
                 type={f.type === 'time' ? 'time' : f.type === 'number' ? 'number' : f.type === 'email' ? 'email' : 'text'}
                 value={draft[f.key] ?? ''}
                 placeholder={f.placeholder ?? ''}
+                min={f.type === 'number' ? f.min : undefined}
+                max={f.type === 'number' ? f.max : undefined}
                 onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
               />
+              {f.helper ? (
+                <div style={{ fontSize: 11, color: MUTED, marginTop: 4, lineHeight: 1.4 }}>{f.helper}</div>
+              ) : null}
             </div>
           ))}
         </div>
@@ -527,6 +541,14 @@ export function PropertyProfileClient({
           { key: 'currency', label: 'Currency' },
           { key: 'timezone', label: 'Timezone' },
           { key: 'numberOfFloors', label: 'Number of floors', type: 'number' },
+          {
+            key: 'routineCleaningIntervalDays',
+            label: 'Routine cleaning interval (days)',
+            type: 'number',
+            min: 1,
+            max: 90,
+            helper: 'Automatically flags a long-vacant room for a routine clean once it has sat unused this many days.',
+          },
         ]}
       />
 

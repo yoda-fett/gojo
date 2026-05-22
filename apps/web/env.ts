@@ -30,6 +30,9 @@ export const env = createEnv({
     REDIS_URL: optionalString(z.string().url()),
     SENTRY_DSN: optionalString(z.string().url()),
     SESSION_IDLE_TIMEOUT_MINUTES: z.coerce.number().int().min(1).max(480).default(480),
+    // Bearer secret guarding mass-mutation internal cron endpoints
+    // (Story 15.7 — POST /api/internal/housekeeping-cadence).
+    CRON_SECRET: optionalString(z.string().min(16)),
   },
   client: {
     NEXT_PUBLIC_APP_URL: optionalString(z.string().url()),
@@ -44,6 +47,7 @@ export const env = createEnv({
     REDIS_URL: process.env['REDIS_URL'],
     SENTRY_DSN: process.env['SENTRY_DSN'],
     SESSION_IDLE_TIMEOUT_MINUTES: process.env['SESSION_IDLE_TIMEOUT_MINUTES'],
+    CRON_SECRET: process.env['CRON_SECRET'],
     NEXT_PUBLIC_APP_URL: process.env['NEXT_PUBLIC_APP_URL'],
   },
   onValidationError(issues) {

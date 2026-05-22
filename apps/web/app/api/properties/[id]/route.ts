@@ -22,6 +22,7 @@ const PROPERTY_SELECT = {
   numberOfFloors: true,
   defaultCheckInTime: true,
   defaultCheckOutTime: true,
+  routineCleaningIntervalDays: true,
   laundryVendorName: true,
   laundryVendorContact: true,
 } as const;

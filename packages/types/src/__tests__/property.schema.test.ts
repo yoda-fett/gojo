@@ -53,4 +53,17 @@ describe('propertyProfileUpdateSchema (Story 12.7b)', () => {
     expect(propertyProfileUpdateSchema.safeParse({ numberOfFloors: 0 }).success).toBe(false);
     expect(propertyProfileUpdateSchema.safeParse({ numberOfFloors: 3 }).success).toBe(true);
   });
+
+  it('rejects routineCleaningIntervalDays outside 1–90 (Story 15.6)', () => {
+    expect(propertyProfileUpdateSchema.safeParse({ routineCleaningIntervalDays: 0 }).success).toBe(false);
+    expect(propertyProfileUpdateSchema.safeParse({ routineCleaningIntervalDays: -1 }).success).toBe(false);
+    expect(propertyProfileUpdateSchema.safeParse({ routineCleaningIntervalDays: 91 }).success).toBe(false);
+    expect(propertyProfileUpdateSchema.safeParse({ routineCleaningIntervalDays: 2.5 }).success).toBe(false);
+    expect(propertyProfileUpdateSchema.safeParse({ routineCleaningIntervalDays: 3 }).success).toBe(true);
+    expect(propertyProfileUpdateSchema.safeParse({ routineCleaningIntervalDays: 90 }).success).toBe(true);
+  });
+
+  it('does not allow null for routineCleaningIntervalDays (non-nullable)', () => {
+    expect(propertyProfileUpdateSchema.safeParse({ routineCleaningIntervalDays: null }).success).toBe(false);
+  });
 });

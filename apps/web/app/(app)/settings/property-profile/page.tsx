@@ -33,6 +33,7 @@ export default async function PropertyProfilePage() {
         numberOfFloors: true,
         defaultCheckInTime: true,
         defaultCheckOutTime: true,
+        routineCleaningIntervalDays: true,
         costConfig: true,
       },
     }),
