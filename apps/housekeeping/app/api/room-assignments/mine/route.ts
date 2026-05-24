@@ -1,16 +1,19 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-import { istDateFromKey, todayInIST } from '@gojo/db';
+import { dateFromKey } from '@gojo/db';
 import { AppError } from '@gojo/types';
 
 import { readHousekeepingActor } from '@/lib/auth';
 import { loadMyDay } from '@/lib/load-my-day';
 
-function dateFromParam(value: string | null) {
-  if (!value) return todayInIST();
+// Validates the optional ?date=YYYY-MM-DD query param. The downstream
+// `loadMyDay` always computes "today" in the property's timezone (hotfix-6),
+// so the parsed result is currently used only for validation.
+function validateDateParam(value: string | null) {
+  if (!value) return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new AppError('VALIDATION_ERROR', 'date must use yyyy-MM-dd', 422);
-  return istDateFromKey(value);
+  return dateFromKey(value);
 }
 
 export async function GET(req: Request) {
@@ -18,7 +21,7 @@ export async function GET(req: Request) {
   if (!actor) return NextResponse.json({ code: 'UNAUTHORIZED' }, { status: 401 });
 
   const dateParam = new URL(req.url).searchParams.get('date');
-  dateFromParam(dateParam);
+  validateDateParam(dateParam);
 
   const day = await loadMyDay(actor);
   return NextResponse.json({

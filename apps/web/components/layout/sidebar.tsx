@@ -355,11 +355,17 @@ export function Sidebar({
 }) {
   const initial = user?.name?.trim()?.[0]?.toUpperCase() ?? 'U';
   return (
+    <aside className="h-screen w-[240px] shrink-0 flex-col bg-[var(--color-charcoal)] text-white xl:fixed xl:inset-y-0 xl:left-0 xl:z-20 xl:flex">
+      {/*
     <aside className="hidden h-screen w-[240px] shrink-0 flex-col bg-[var(--color-charcoal)] text-white xl:fixed xl:inset-y-0 xl:left-0 xl:z-20 xl:flex">
+    */}
       {/* Logo block */}
       <div className="border-b border-white/[0.07] px-6 pb-5 pt-6">
         <Link href="/dashboard" className="flex items-center gap-[10px]">
-          <Image src="/assets/logo-old.png" alt="goJo" width={38} height={38} priority className="shrink-0" />
+          {/*
+          <Image src="/gojo_nobg_large.png" alt="goJo" width={38} height={38} priority className="shrink-0" />
+          */}
+          <Image src="/gojo_nobg_large.png" alt="goJo" width={38} height={38} unoptimized className="shrink-0" />
           <div> 
             <div className="text-[22px] font-bold leading-none tracking-[-0.03em] text-[var(--color-teal)]">gojo</div>
             <div className="mt-[2px] text-[11px] font-normal tracking-[0.02em] text-[var(--color-mid-gray)]">

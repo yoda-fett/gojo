@@ -57,8 +57,12 @@ describe('epic 11 room assignments', () => {
   });
 
   it('computes the IST calendar day', () => {
-    const lateUtc = new Date('2026-05-13T19:00:00.000Z');
+    const lateUtc = new Date('2026-05-13T19:00:00.000Z'); // 00:30 IST May 14
     expect(istDateKey(lateUtc)).toBe('2026-05-14');
-    expect(todayInIST(lateUtc).toISOString()).toBe('2026-05-13T18:30:00.000Z');
+    // todayInIST is UTC-anchored to the IST date so Prisma @db.Date queries
+    // round-trip cleanly. Previously asserted '2026-05-13T18:30:00.000Z'
+    // (IST midnight) which was the exact off-by-one symptom fixed in
+    // hotfix-6-ist-date-bug.md.
+    expect(todayInIST(lateUtc).toISOString()).toBe('2026-05-14T00:00:00.000Z');
   });
 });

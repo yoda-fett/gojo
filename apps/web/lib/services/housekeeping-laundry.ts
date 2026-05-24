@@ -414,84 +414,98 @@ export async function receiveLaundry(
   await checkSubscriptionGate(actor, 'laundry.receive', prisma);
 
   return withIdempotency(`laundry-receive:v1:${actor.propertyId}:${input.idempotencyKey}`, prisma, async () => {
-    return prisma.$transaction(async (tx) => {
-      const receivedRows = [];
-      const shortages = [];
+    // ── Pre-tx validation (was inside the tx, blew the 5s budget on the
+    //    pooler when items.length > 2). Each row gets a single read; run in
+    //    parallel. Quantity-bounds check is local, no DB call.
+    for (const row of input.items) {
+      if (row.receivedQty < 0 || row.receivedQty > 100000) {
+        throw new AppError('VALIDATION_ERROR', 'Invalid received quantity', 422);
+      }
+    }
+    await Promise.all(input.items.map((row) => validateLinenItem(actor, row.catalogItemId)));
 
-      for (const row of input.items) {
-        await validateLinenItem(actor, row.catalogItemId);
-        if (row.receivedQty < 0 || row.receivedQty > 100000) {
-          throw new AppError('VALIDATION_ERROR', 'Invalid received quantity', 422);
+    // ── Mutating work — atomic, with a roomy timeout. The default 5s budget
+    //    is tight on Supabase's pooler when N items × M open cycles each need
+    //    update+create round-trips. Bumped to 15s to absorb pooler latency.
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const receivedRows = [];
+        const shortages = [];
+
+        for (const row of input.items) {
+          let remainingToReceive = row.receivedQty;
+          const outgoing = await tx.laundryLogItem.findMany({
+            where: {
+              propertyId: actor.propertyId,
+              catalogItemId: row.catalogItemId,
+              state: 'ITEMS_OUT',
+              remainingQty: { gt: 0 },
+            },
+            orderBy: { createdAt: 'asc' },
+          });
+          const expected = outgoing.reduce((sum, item) => sum + item.remainingQty, 0);
+
+          for (const outItem of outgoing) {
+            if (remainingToReceive <= 0) break;
+            const applied = Math.min(outItem.remainingQty, remainingToReceive);
+            remainingToReceive -= applied;
+            await tx.laundryLogItem.update({
+              where: { id: outItem.id },
+              data: { remainingQty: outItem.remainingQty - applied },
+            });
+            const inItem = await tx.laundryLogItem.create({
+              data: {
+                propertyId: actor.propertyId,
+                laundryLogId: outItem.laundryLogId,
+                sourceLaundryLogItemId: outItem.id,
+                catalogItemId: row.catalogItemId,
+                state: 'ITEMS_IN',
+                qty: applied,
+                remainingQty: 0,
+              },
+            });
+            receivedRows.push(inItem);
+          }
+
+          if (row.receivedQty < expected) {
+            const shortageQty = expected - row.receivedQty;
+            const review = await tx.pendingReview.create({
+              data: {
+                propertyId: actor.propertyId,
+                reviewType: 'LAUNDRY_SHORTAGE',
+                catalogItemId: row.catalogItemId,
+                qty: shortageQty,
+                reason: 'Received fewer items than expected from laundry vendor',
+                metadata: { expected, received: row.receivedQty },
+                createdBy: actor.userId,
+              },
+            });
+            shortages.push(review);
+          }
         }
 
-        let remainingToReceive = row.receivedQty;
-        const outgoing = await tx.laundryLogItem.findMany({
-          where: {
-            propertyId: actor.propertyId,
-            catalogItemId: row.catalogItemId,
-            state: 'ITEMS_OUT',
-            remainingQty: { gt: 0 },
-          },
-          orderBy: { createdAt: 'asc' },
+        await writeAuditLog(tx, actor, {
+          action: 'LAUNDRY_ITEMS_RECEIVED',
+          entityType: 'LAUNDRY_LOG',
+          entityId: 'aggregate-receive',
+          after: { items: input.items, receivedCount: receivedRows.length, shortageCount: shortages.length },
         });
-        const expected = outgoing.reduce((sum, item) => sum + item.remainingQty, 0);
 
-        for (const outItem of outgoing) {
-          if (remainingToReceive <= 0) break;
-          const applied = Math.min(outItem.remainingQty, remainingToReceive);
-          remainingToReceive -= applied;
-          await tx.laundryLogItem.update({
-            where: { id: outItem.id },
-            data: { remainingQty: outItem.remainingQty - applied },
-          });
-          const inItem = await tx.laundryLogItem.create({
-            data: {
-              propertyId: actor.propertyId,
-              laundryLogId: outItem.laundryLogId,
-              sourceLaundryLogItemId: outItem.id,
-              catalogItemId: row.catalogItemId,
-              state: 'ITEMS_IN',
-              qty: applied,
-              remainingQty: 0,
-            },
-          });
-          receivedRows.push(inItem);
-        }
+        return { receivedRows, shortages };
+      },
+      { timeout: 15_000, maxWait: 5_000 },
+    );
 
-        if (row.receivedQty < expected) {
-          const shortageQty = expected - row.receivedQty;
-          const review = await tx.pendingReview.create({
-            data: {
-              propertyId: actor.propertyId,
-              reviewType: 'LAUNDRY_SHORTAGE',
-              catalogItemId: row.catalogItemId,
-              qty: shortageQty,
-              reason: 'Received fewer items than expected from laundry vendor',
-              metadata: { expected, received: row.receivedQty },
-              createdBy: actor.userId,
-            },
-          });
-          shortages.push(review);
-        }
-      }
+    // ── Post-tx side effects (pool-alert checks). Read-only against the now-
+    //    committed state; doesn't need to be inside the mutation tx, and
+    //    moving it out removes ~N round-trips from the tx budget.
+    await Promise.all(input.items.map((row) => checkPoolBelowMin(actor.propertyId, row.catalogItemId)));
 
-      await writeAuditLog(tx, actor, {
-        action: 'LAUNDRY_ITEMS_RECEIVED',
-        entityType: 'LAUNDRY_LOG',
-        entityId: 'aggregate-receive',
-        after: { items: input.items, receivedCount: receivedRows.length, shortageCount: shortages.length },
-      });
-
-      for (const row of input.items) {
-        await checkPoolBelowMin(actor.propertyId, row.catalogItemId);
-      }
-
-      return {
-        ok: true,
-        receivedItemIds: receivedRows.map((row) => row.id),
-        shortageReviewIds: shortages.map((row) => row.id),
-      };
-    });
+    return {
+      ok: true,
+      receivedItemIds: result.receivedRows.map((row) => row.id),
+      shortageReviewIds: result.shortages.map((row) => row.id),
+    };
   });
 }
 

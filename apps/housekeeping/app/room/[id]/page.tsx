@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { Check, Plus, RotateCcw, Sparkles } from 'lucide-react';
 
-import { deriveRoomStatus, prisma, todayInIST, type RoomDisplayState } from '@gojo/db';
+import { deriveRoomStatus, prisma, todayInTz, type RoomDisplayState } from '@gojo/db';
 
 import { PwaShell } from '@/components/pwa-shell';
 import { readHousekeepingActor } from '@/lib/auth';
@@ -15,9 +15,10 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   if (!actor) redirect('/sign-in');
   const { id } = await params;
 
-  const room = await prisma.room.findFirst({
-    where: { id, propertyId: actor.propertyId, deletedAt: null },
-  });
+  const [room, property] = await Promise.all([
+    prisma.room.findFirst({ where: { id, propertyId: actor.propertyId, deletedAt: null } }),
+    prisma.property.findUnique({ where: { id: actor.propertyId }, select: { timezone: true } }),
+  ]);
   if (!room) redirect('/');
 
   // Prisma row types degrade to index signatures across the package boundary
@@ -25,7 +26,10 @@ export default async function RoomPage({ params }: { params: Promise<{ id: strin
   // so coerce the room id once for the follow-up queries.
   const roomId = String(room.id);
   const now = new Date();
-  const assignedDate = todayInIST();
+  // hotfix-6: "today" is computed in the property's local timezone so the
+  // `assigned_date` filter against the @db.Date column round-trips correctly.
+  const tz = String(property?.timezone ?? 'Asia/Kolkata');
+  const assignedDate = todayInTz(tz, now);
   const [reservations, blocks, assignment] = await Promise.all([
     prisma.reservation.findMany({
       where: {

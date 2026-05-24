@@ -473,6 +473,8 @@ function CounterBlock({
 export function LaundryReceiveClient({ snapshot }: { snapshot: any }) {
   const [qty, setQty] = useState<Record<string, number>>({});
   const [evidence, setEvidence] = useState(defaultEvidence);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const rows = snapshot.items ?? [];
   const totalTypes = rows.length;
   const totalExpected = rows.reduce((sum: number, item: any) => sum + (item.expectedBack ?? 0), 0);
@@ -501,12 +503,36 @@ export function LaundryReceiveClient({ snapshot }: { snapshot: any }) {
       : 'ok';
 
   async function submit() {
-    const payload = {
-      items: rows.map((item: any) => ({ catalogItemId: item.catalogItemId, receivedQty: qty[item.catalogItemId] ?? 0 })),
-      evidence,
-    };
-    const res = await fetch('/api/laundry-logs/receive', { method: 'POST', headers: syncHeaders(), body: JSON.stringify(payload) });
-    if (res.ok) location.href = '/laundry-in';
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const payload = {
+        items: rows.map((item: any) => ({ catalogItemId: item.catalogItemId, receivedQty: qty[item.catalogItemId] ?? 0 })),
+        evidence,
+      };
+      const res = await fetch('/api/laundry-logs/receive', {
+        method: 'POST',
+        headers: syncHeaders(),
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        location.href = '/laundry-in';
+        return;
+      }
+      // Surface the real failure instead of a silent no-op. Reads the server's
+      // JSON error envelope (`{ code, message }`) when present.
+      const body = await res.json().catch(() => null);
+      const message = body?.message ?? body?.code ?? `Request failed (${res.status})`;
+      setError(message);
+      console.error('[laundry-receive] submit failed', { status: res.status, body });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Network error';
+      setError(message);
+      console.error('[laundry-receive] submit exception', err);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -516,11 +542,11 @@ export function LaundryReceiveClient({ snapshot }: { snapshot: any }) {
       subtitle={`${formatIstDate(new Date().toISOString())} · ${snapshot.vendorName}`}
       back="/laundry-in"
       progress={{ done, total: totalTypes, label: 'Items recorded' }}
-      disabled={rows.length === 0 || !anyTouched}
-      helperText={rows.length === 0 ? undefined : helperText}
-      helperTone={rows.length === 0 ? undefined : helperTone}
+      disabled={rows.length === 0 || !anyTouched || submitting}
+      helperText={error ? `Submit failed: ${error}` : rows.length === 0 ? undefined : helperText}
+      helperTone={error ? 'warn' : rows.length === 0 ? undefined : helperTone}
       onSubmit={submit}
-      cta="Mark Receive Complete"
+      cta={submitting ? 'Submitting…' : 'Mark Receive Complete'}
     >
       {rows.length === 0 ? (
         <div className="hk-empty">

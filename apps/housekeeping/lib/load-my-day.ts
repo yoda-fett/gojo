@@ -1,4 +1,4 @@
-import { deriveRoomStatus, prisma, todayInIST } from '@gojo/db';
+import { deriveRoomStatus, prisma, todayInTz } from '@gojo/db';
 
 import type { Actor } from '@gojo/types';
 
@@ -9,20 +9,27 @@ import type { RoomCardData } from '@/components/room-card-mobile';
 // field is coerced explicitly — the same defensive pattern the rest of this
 // file already uses.
 export async function loadMyDay(actor: Actor) {
-  const assignedDate = todayInIST();
+  // Load the property first so we can compute "today" in its local timezone
+  // (hotfix-6) — falls back to IST if the field is somehow missing.
+  const property = await prisma.property.findUnique({
+    where: { id: actor.propertyId },
+    select: { name: true, timezone: true },
+  });
+  const tz = String(property?.timezone ?? 'Asia/Kolkata');
+  const assignedDate = todayInTz(tz);
+
   const assignments = await prisma.roomAssignment.findMany({
     where: { propertyId: actor.propertyId, staffUserId: actor.userId, assignedDate, deletedAt: null },
     orderBy: { createdAt: 'asc' },
   });
   const roomIds = assignments.map((a) => String(a.roomId));
-  const [rooms, roomTypes, user, property, reservations, blocks] = await Promise.all([
+  const [rooms, roomTypes, user, reservations, blocks] = await Promise.all([
     prisma.room.findMany({
       where: { propertyId: actor.propertyId, id: { in: roomIds }, deletedAt: null },
       orderBy: { number: 'asc' },
     }),
     prisma.roomType.findMany({ where: { propertyId: actor.propertyId, deletedAt: null }, select: { id: true, name: true } }),
     prisma.user.findUnique({ where: { id: actor.userId }, select: { name: true } }),
-    prisma.property.findUnique({ where: { id: actor.propertyId }, select: { name: true } }),
     // Epic 15: reservations + blocks feed `deriveRoomStatus` so each card can
     // show the composed occupancy-context chip.
     prisma.reservation.findMany({
