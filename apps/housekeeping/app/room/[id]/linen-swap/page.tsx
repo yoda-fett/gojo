@@ -15,7 +15,7 @@ export default async function LinenSwapPage({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const room = await prisma.room.findFirst({ where: { id, propertyId: actor.propertyId, deletedAt: null } });
   if (!room) redirect('/');
-  const [items, ownerOpenLog] = await Promise.all([
+  const [items, ownerOpenLog, roomType] = await Promise.all([
     prisma.catalogItem.findMany({
       where: { propertyId: actor.propertyId, itemType: 'LINEN', linenCategory: 'ROUTINE', deletedAt: null },
       orderBy: { name: 'asc' },
@@ -24,6 +24,17 @@ export default async function LinenSwapPage({ params }: { params: Promise<{ id: 
       where: { propertyId: actor.propertyId, roomId: id, state: 'ITEMS_OUT', createdByRole: 'OWNER', deletedAt: null },
       orderBy: { createdAt: 'asc' },
     }),
+    room.roomTypeId
+      ? prisma.roomType.findUnique({ where: { id: String(room.roomTypeId) }, select: { name: true } })
+      : Promise.resolve(null),
   ]);
-  return <LinenTaskClient room={room} items={items.map((item) => ({ ...item, standardQty: 1 }))} category="ROUTINE" ownerOpenLog={ownerOpenLog} />;
+  return (
+    <LinenTaskClient
+      room={room}
+      roomTypeName={roomType?.name ? String(roomType.name) : undefined}
+      items={items.map((item) => ({ ...item, standardQty: 1 }))}
+      category="ROUTINE"
+      ownerOpenLog={ownerOpenLog}
+    />
+  );
 }

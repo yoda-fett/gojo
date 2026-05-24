@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { prisma } from '@gojo/db';
+import { prisma, todayInIST } from '@gojo/db';
 
 import { ProfileClient } from '@/components/profile-client';
 import { readHousekeepingActor } from '@/lib/auth';
@@ -17,20 +17,43 @@ export default async function ProfilePage() {
   if (!actor) redirect('/sign-in');
   if (cookieStore.get(HK_SHIFT_COOKIE)?.value !== '1') redirect('/shift-start');
 
-  const [day, user] = await Promise.all([
+  const todayStart = todayInIST();
+  const [day, user, todayReports] = await Promise.all([
     loadMyDay(actor),
-    prisma.user.findUnique({ where: { id: actor.userId }, select: { pinHash: true } }),
+    prisma.user.findUnique({ where: { id: actor.userId }, select: { pinHash: true, name: true } }),
+    // Today's issue reports by this staff member — fuels the "Today's reports"
+    // recap. Read-only group-by; no schema change.
+    prisma.issueReport.findMany({
+      where: {
+        propertyId: actor.propertyId,
+        reportedBy: actor.userId,
+        reportedAt: { gte: todayStart },
+        deletedAt: null,
+      },
+      select: { category: true },
+    }),
   ]);
+
   const incomplete = day.items.filter((room) => roomCardStatus(room.housekeepingState) !== 'done');
-  const userInitial = day.userName.trim()[0]?.toUpperCase() ?? 'S';
+  const userName = String(user?.name ?? day.userName ?? 'Staff');
+  const userInitial = userName.trim()[0]?.toUpperCase() ?? 'S';
+
+  let filedMissing = 0;
+  let filedDamaged = 0;
+  for (const r of todayReports) {
+    if (r.category === 'MISSING_ITEM') filedMissing += 1;
+    else if (r.category === 'DAMAGED_RETURN') filedDamaged += 1;
+  }
 
   return (
     <ProfileClient
       dateLabel={day.dateLabel}
       userInitial={userInitial}
+      userName={userName}
+      allRooms={day.items}
       incomplete={incomplete}
-      filedMissing={0}
-      filedDamaged={0}
+      filedMissing={filedMissing}
+      filedDamaged={filedDamaged}
       hasPin={Boolean(user?.pinHash)}
     />
   );

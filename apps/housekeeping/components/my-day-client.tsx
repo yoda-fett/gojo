@@ -71,6 +71,7 @@ export function MyDayClient({ dateLabel, userInitial, items: initialItems, done,
         <ReassignmentBanner title={banner.title} message={banner.message} onDismiss={() => setBanner(null)} />
       ) : null}
       <div className="hk-ptr" onClick={() => void refresh()} role="button" tabIndex={0}>
+        {refreshing ? null : <span className="hk-ptr-arrow" aria-hidden />}
         <span>{refreshing ? 'Refreshing…' : 'Pull down to refresh'}</span>
       </div>
       {items.length === 0 ? (
@@ -79,7 +80,7 @@ export function MyDayClient({ dateLabel, userInitial, items: initialItems, done,
         <>
           <div className="hk-section-label">
             <span>Today&apos;s rooms</span>
-            <span style={{ color: '#1DA888', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>Filter · All</span>
+            <span className="hk-filter">Filter · All</span>
           </div>
           <div className="hk-room-list">
             {items.map((room) => (

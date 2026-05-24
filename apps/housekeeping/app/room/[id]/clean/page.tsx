@@ -15,5 +15,8 @@ export default async function CleanPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const room = await prisma.room.findFirst({ where: { id, propertyId: actor.propertyId, deletedAt: null } });
   if (!room) redirect('/');
-  return <CleanTaskClient room={room} photoRequired={false} />;
+  const roomType = room.roomTypeId
+    ? await prisma.roomType.findUnique({ where: { id: String(room.roomTypeId) }, select: { name: true } })
+    : null;
+  return <CleanTaskClient room={room} roomTypeName={roomType?.name ? String(roomType.name) : undefined} photoRequired={false} />;
 }
