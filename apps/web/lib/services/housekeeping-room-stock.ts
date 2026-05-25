@@ -75,7 +75,7 @@ export async function getRoomStock(actor: Actor) {
     }),
     prisma.roomConsumableState.findMany({
       where: { propertyId: actor.propertyId, deletedAt: null },
-      select: { roomId: true, catalogItemId: true, lastRefillAt: true },
+      select: { roomId: true, catalogItemId: true, currentQty: true, lastRefillAt: true },
     }),
     prisma.inventoryRestock.findMany({ where: { propertyId: actor.propertyId }, select: { catalogItemId: true, qtyAdded: true } }),
     prisma.consumptionLog.findMany({ where: { propertyId: actor.propertyId }, select: { catalogItemId: true, qtyUsed: true } }),
@@ -96,35 +96,74 @@ export async function getRoomStock(actor: Actor) {
   const consumed = sumByItem(consumptions, (row) => row.qtyUsed);
   const losses = sumByItem(writeOffs, (row) => row.qty);
 
+  const enrichedRooms = rooms.map((room) => {
+    const roomAmenities = amenities.filter((item) => item.roomTypeId === room.roomTypeId);
+    const items = roomAmenities.map((item) => {
+      const availability = calculateStorageAvailability({
+        catalogItemId: item.id,
+        stocked: stocked.get(item.id) ?? 0,
+        consumed: consumed.get(item.id) ?? 0,
+        writeOffs: losses.get(item.id) ?? 0,
+      });
+      const state = stateMap.get(`${room.id}:${item.id}`);
+      const par = item.expectedQtyPerStay ?? 0;
+      const currentQty = state?.currentQty ?? par;
+      // Per-item status against par: at-zero (coral), below par (amber), at par (teal).
+      const itemStatus = currentQty <= 0 ? 'empty' : currentQty < par ? 'low' : 'ok';
+      return {
+        catalogItemId: item.id,
+        name: item.name,
+        unit: item.unit,
+        par,
+        currentQty,
+        itemStatus,
+        lastRefillAt: state?.lastRefillAt ?? null,
+        storageAvailability: availability.status,
+        storageLevel: availability.level,
+      };
+    });
+
+    // Roll-up: any item at 0 → out-of-stock; any below par → low; otherwise full.
+    const hasEmpty = items.some((it) => it.itemStatus === 'empty');
+    const hasLow = items.some((it) => it.itemStatus === 'low');
+    const status = hasEmpty ? 'out' : hasLow ? 'low' : 'full';
+
+    const lastRefillAt = items.reduce<Date | null>((acc, it) => {
+      if (!it.lastRefillAt) return acc;
+      const d = it.lastRefillAt as Date;
+      if (!acc || d > acc) return d;
+      return acc;
+    }, null);
+
+    return {
+      roomId: room.id,
+      roomNumber: room.number,
+      roomType: roomTypeMap.get(room.roomTypeId) ?? 'Room',
+      status,
+      lastRefillAt,
+      items,
+    };
+  });
+
+  const counts = {
+    fullyStocked: enrichedRooms.filter((r) => r.status === 'full').length,
+    lowStock: enrichedRooms.filter((r) => r.status === 'low').length,
+    outOfStock: enrichedRooms.filter((r) => r.status === 'out').length,
+    total: enrichedRooms.length,
+  };
+
+  const latestRefill = enrichedRooms.reduce<Date | null>((acc, r) => {
+    if (!r.lastRefillAt) return acc;
+    if (!acc || r.lastRefillAt > acc) return r.lastRefillAt;
+    return acc;
+  }, null);
+
   return {
     canMutate: ownerRoles.includes(actor.role as (typeof ownerRoles)[number]),
     staff: staffUsers.map((user) => ({ id: user.id, name: user.name ?? user.phone, phone: user.phone })),
-    rooms: rooms.map((room) => {
-      const roomAmenities = amenities.filter((item) => item.roomTypeId === room.roomTypeId);
-      return {
-        roomId: room.id,
-        roomNumber: room.number,
-        roomType: roomTypeMap.get(room.roomTypeId) ?? 'Room',
-        items: roomAmenities.map((item) => {
-          const availability = calculateStorageAvailability({
-            catalogItemId: item.id,
-            stocked: stocked.get(item.id) ?? 0,
-            consumed: consumed.get(item.id) ?? 0,
-            writeOffs: losses.get(item.id) ?? 0,
-          });
-          const state = stateMap.get(`${room.id}:${item.id}`);
-          return {
-            catalogItemId: item.id,
-            name: item.name,
-            unit: item.unit,
-            par: item.expectedQtyPerStay ?? 0,
-            lastRefillAt: state?.lastRefillAt ?? null,
-            storageAvailability: availability.status,
-            storageLevel: availability.level,
-          };
-        }),
-      };
-    }),
+    counts,
+    lastRefillSweep: latestRefill ? { at: latestRefill } : null,
+    rooms: enrichedRooms,
   };
 }
 

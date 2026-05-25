@@ -15,7 +15,9 @@ export const GET = withAuth(async (_req, actor) => {
   const dayEnd = endOfIstDayUtc(today);
   const now = new Date();
 
-  const [rooms, roomTypes, todaysReservations, blocks] = await Promise.all([
+  const todayDateOnly = new Date(`${today}T00:00:00.000Z`);
+
+  const [rooms, roomTypes, todaysReservations, blocks, assignments] = await Promise.all([
     prisma.room.findMany({
       where: { propertyId: actor.propertyId, deletedAt: null },
       orderBy: { number: 'asc' },
@@ -42,7 +44,37 @@ export const GET = withAuth(async (_req, actor) => {
         OR: [{ endDate: null }, { endDate: { gte: dayStart } }],
       },
     }),
+    prisma.roomAssignment.findMany({
+      where: {
+        propertyId: actor.propertyId,
+        deletedAt: null,
+        assignedDate: todayDateOnly,
+      },
+      select: { id: true, roomId: true, staffUserId: true, stateVersion: true },
+    }),
   ]);
+
+  const staffIds = Array.from(new Set(assignments.map((a) => a.staffUserId)));
+  const staffUsers = staffIds.length
+    ? await prisma.user.findMany({
+        where: { id: { in: staffIds } },
+        select: { id: true, name: true, phone: true },
+      })
+    : [];
+  const staffMap = new Map(staffUsers.map((u) => [u.id, u]));
+  const assignmentByRoom = new Map<string, { id: string; staffUserId: string; stateVersion: number; name: string; initials: string }>();
+  for (const a of assignments) {
+    const user = staffMap.get(a.staffUserId);
+    const name = user?.name?.trim() || user?.phone || 'Staff';
+    const initials = name
+      .split(/\s+/)
+      .map((p) => p[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'ST';
+    assignmentByRoom.set(a.roomId, { id: a.id, staffUserId: a.staffUserId, stateVersion: a.stateVersion, name, initials });
+  }
 
   const guestIds = Array.from(new Set(todaysReservations.map((r) => r.guestId)));
   const guests = await prisma.guest.findMany({
@@ -74,12 +106,16 @@ export const GET = withAuth(async (_req, actor) => {
 
   const rows = rooms.map((room) => {
     const roomReservations = reservationsByRoom.get(room.id) ?? [];
+    const roomBlocks = blocksByRoom.get(room.id) ?? [];
     const status = deriveRoomStatus(
       { housekeepingStatus: room.housekeepingStatus, holdExpiresAt: room.holdExpiresAt },
       roomReservations,
-      blocksByRoom.get(room.id) ?? [],
+      roomBlocks,
       now,
     );
+    const activeBlock = roomBlocks.find(
+      (b) => b.startDate <= now && (b.endDate === null || b.endDate >= now),
+    ) ?? roomBlocks[0] ?? null;
 
     let priority: 'high' | 'med' | 'low' = 'low';
     if (status.housekeeping === 'DIRTY' && status.timeline.arrivingToday) priority = 'high';
@@ -120,17 +156,47 @@ export const GET = withAuth(async (_req, actor) => {
       priority,
       reason,
       outOfService: status.outOfService,
+      blockId: status.outOfService ? activeBlock?.id ?? null : null,
+      assignment: assignmentByRoom.get(room.id) ?? null,
+      assignee: assignmentByRoom.get(room.id)
+        ? { name: assignmentByRoom.get(room.id)!.name, initials: assignmentByRoom.get(room.id)!.initials }
+        : null,
       lastUpdatedAt: room.updatedAt,
     };
   });
 
   const counts = {
     total: rows.length,
-    needsCleaning: rows.filter((r) => r.housekeeping === 'DIRTY').length,
-    inProgress: 0,
+    needsCleaning: rows.filter((r) => r.housekeeping === 'DIRTY' && !r.outOfService && !r.assignment).length,
+    inProgress: rows.filter((r) => r.housekeeping === 'DIRTY' && !r.outOfService && r.assignment).length,
     cleanReady: rows.filter((r) => r.housekeeping === 'CLEAN' && !r.outOfService).length,
     outOfOrder: rows.filter((r) => r.outOfService != null).length,
   };
 
-  return NextResponse.json({ rooms: rows, counts });
+  // Staff roster for the assign/reassign drawer — active HOUSEKEEPING access
+  // for this property. Inlined into the payload (saves a round-trip; the list
+  // is small).
+  const access = await prisma.propertyAccess.findMany({
+    where: { propertyId: actor.propertyId, role: 'HOUSEKEEPING', status: 'ACTIVE', revokedAt: null, deletedAt: null },
+    select: { userId: true },
+  });
+  const staffRosterUsers = access.length
+    ? await prisma.user.findMany({
+        where: { id: { in: access.map((r) => r.userId) }, deletedAt: null },
+        select: { id: true, name: true, phone: true },
+      })
+    : [];
+  const staff = staffRosterUsers.map((u) => {
+    const name = u.name?.trim() || u.phone;
+    const initials = name
+      .split(/\s+/)
+      .map((p) => p[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'ST';
+    return { id: u.id, name, initials };
+  });
+
+  return NextResponse.json({ rooms: rows, counts, staff });
 }, ['OWNER', 'MANAGER', 'FRONT_DESK', 'HOUSEKEEPING']);

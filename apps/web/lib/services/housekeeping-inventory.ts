@@ -13,6 +13,9 @@ type CatalogItemRow = {
   restockThreshold: number | null;
   linenCategory: string | null;
   totalOwned: number | null;
+  minPoolSize: number | null;
+  roomTypeId: string | null;
+  expectedQtyPerStay: number | null;
 };
 type IssueReportRow = {
   id: string;
@@ -27,6 +30,7 @@ type IssueReportRow = {
   photoFileUrl: string | null;
   textNote: string | null;
   reportedAt: Date;
+  reportedBy: string;
   status: string;
   stateVersion: number;
 };
@@ -150,27 +154,62 @@ async function getItem(db: CatalogLookup, propertyId: string, catalogItemId: str
 }
 
 export async function getInventoryLevels(actor: Actor) {
-  const [catalogItemsRaw, restocksRaw, consumptionsRaw, amenityWriteOffsRaw, linenRoomStatesRaw, openLaundryItemsRaw, linenWriteOffsRaw] =
-    await Promise.all([
-      prisma.catalogItem.findMany({
-        where: { propertyId: actor.propertyId, deletedAt: null, itemType: { in: ['AMENITY', 'LINEN'] } },
-        orderBy: [{ itemType: 'asc' }, { name: 'asc' }],
-      }),
-      prisma.inventoryRestock.findMany({ where: { propertyId: actor.propertyId } }),
-      prisma.consumptionLog.findMany({ where: { propertyId: actor.propertyId } }),
-      prisma.consumableWriteOff.findMany({ where: { propertyId: actor.propertyId } }),
-      prisma.roomLinenState.findMany({ where: { propertyId: actor.propertyId, deletedAt: null } }),
-      prisma.laundryLogItem.findMany({ where: { propertyId: actor.propertyId, state: 'ITEMS_OUT', remainingQty: { gt: 0 } } }),
-      prisma.linenWriteOff.findMany({ where: { propertyId: actor.propertyId } }),
-    ]);
+  // Hotfix-9: extended payload powers the new Amenities + Linens tabs.
+  //  - Adds last-consumption per amenity, "approaching threshold" bucket,
+  //    most-recent restock metadata, and room-type list for filters.
+  //  - Adds stalled (>24h) laundry pieces per linen, distribution segments,
+  //    and per-row status (Below min / At min / OK).
+  const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  const [
+    catalogItemsRaw,
+    restocksRaw,
+    consumptionsRaw,
+    amenityWriteOffsRaw,
+    linenRoomStatesRaw,
+    openLaundryItemsRaw,
+    stalledLaundryItemsRaw,
+    linenWriteOffsRaw,
+    roomTypesRaw,
+    latestRestockRaw,
+  ] = await Promise.all([
+    prisma.catalogItem.findMany({
+      where: { propertyId: actor.propertyId, deletedAt: null, itemType: { in: ['AMENITY', 'LINEN'] } },
+      orderBy: [{ itemType: 'asc' }, { name: 'asc' }],
+    }),
+    prisma.inventoryRestock.findMany({ where: { propertyId: actor.propertyId } }),
+    prisma.consumptionLog.findMany({ where: { propertyId: actor.propertyId }, select: { catalogItemId: true, qtyUsed: true, createdAt: true } }),
+    prisma.consumableWriteOff.findMany({ where: { propertyId: actor.propertyId } }),
+    prisma.roomLinenState.findMany({ where: { propertyId: actor.propertyId, deletedAt: null } }),
+    prisma.laundryLogItem.findMany({
+      where: { propertyId: actor.propertyId, state: 'ITEMS_OUT', remainingQty: { gt: 0 } },
+      select: { catalogItemId: true, remainingQty: true, laundryLogId: true },
+    }),
+    // Stalled laundry items: filtered post-fetch by joining to LaundryLog
+    // (the schema declares no relation, only a fk). Reused below.
+    prisma.laundryLog.findMany({
+      where: { propertyId: actor.propertyId, state: 'ITEMS_OUT', createdAt: { lt: cutoff24h } },
+      select: { id: true },
+    }),
+    prisma.linenWriteOff.findMany({ where: { propertyId: actor.propertyId } }),
+    prisma.roomType.findMany({ where: { propertyId: actor.propertyId, deletedAt: null }, select: { id: true, name: true } }),
+    prisma.inventoryRestock.findFirst({
+      where: { propertyId: actor.propertyId },
+      orderBy: { recordedAt: 'desc' },
+      select: { catalogItemId: true, qtyAdded: true, recordedAt: true },
+    }),
+  ]);
 
   const catalogItems = catalogItemsRaw as CatalogItemRow[];
   const restocks = restocksRaw as LedgerAddedRow[];
-  const consumptions = consumptionsRaw as ConsumptionQtyRow[];
+  const consumptions = consumptionsRaw as Array<ConsumptionQtyRow & { createdAt: Date }>;
   const amenityWriteOffs = amenityWriteOffsRaw as LedgerQtyRow[];
   const linenRoomStates = linenRoomStatesRaw as LedgerQtyRow[];
-  const openLaundryItems = openLaundryItemsRaw as LaundryOutQtyRow[];
+  const openLaundryItems = openLaundryItemsRaw as Array<LaundryOutQtyRow & { laundryLogId: string }>;
+  const stalledLogIds = new Set((stalledLaundryItemsRaw as Array<{ id: string }>).map((row) => row.id));
+  const stalledLaundryItems = openLaundryItems.filter((item) => stalledLogIds.has(item.laundryLogId));
   const linenWriteOffs = linenWriteOffsRaw as LedgerQtyRow[];
+  const roomTypes = roomTypesRaw as Array<{ id: string; name: string }>;
 
   const sumByItem = <T extends { catalogItemId: string }>(rows: T[], read: (row: T) => number) => {
     const totals = new Map<string, number>();
@@ -178,12 +217,25 @@ export async function getInventoryLevels(actor: Actor) {
     return totals;
   };
 
+  const lastByItem = <T extends { catalogItemId: string }>(rows: T[], read: (row: T) => Date) => {
+    const map = new Map<string, Date>();
+    for (const row of rows) {
+      const cur = map.get(row.catalogItemId);
+      const d = read(row);
+      if (!cur || d > cur) map.set(row.catalogItemId, d);
+    }
+    return map;
+  };
+
   const stocked = sumByItem(restocks, (row) => row.qtyAdded);
   const consumed = sumByItem(consumptions, (row) => row.qtyUsed);
+  const lastConsumed = lastByItem(consumptions, (row) => row.createdAt);
   const amenityLoss = sumByItem(amenityWriteOffs, (row) => row.qty);
   const inRooms = sumByItem(linenRoomStates, (row) => row.qty);
   const inLaundry = sumByItem(openLaundryItems, (row) => row.remainingQty);
+  const stalledByItem = sumByItem(stalledLaundryItems, (row) => row.remainingQty);
   const linenLoss = sumByItem(linenWriteOffs, (row) => row.qty);
+  const roomTypeMap = new Map(roomTypes.map((rt) => [rt.id, rt.name]));
 
   const amenities = catalogItems
     .filter((item) => item.itemType === 'AMENITY')
@@ -193,40 +245,94 @@ export async function getInventoryLevels(actor: Actor) {
         consumed: consumed.get(item.id) ?? 0,
         writeOffs: amenityLoss.get(item.id) ?? 0,
       });
-      const restockThreshold = item.restockThreshold ?? 0;
+      const threshold = item.restockThreshold;
+      // §3.1 status bucket: Below (< threshold) / Approaching (within 20%) / OK.
+      let statusBucket: 'Below' | 'Approaching' | 'OK' = 'OK';
+      if (threshold !== null && currentLevel < threshold) statusBucket = 'Below';
+      else if (threshold !== null && currentLevel <= threshold * 1.2) statusBucket = 'Approaching';
       return {
         id: item.id,
         name: item.name,
         unit: item.unit,
         currentLevel,
-        restockThreshold: item.restockThreshold,
-        status: item.restockThreshold !== null && currentLevel < restockThreshold ? 'Below Threshold' : 'Healthy',
+        restockThreshold: threshold,
+        roomTypeId: item.roomTypeId,
+        roomTypeName: item.roomTypeId ? roomTypeMap.get(item.roomTypeId) ?? null : null,
+        expectedQtyPerStay: item.expectedQtyPerStay,
+        lastConsumedAt: lastConsumed.get(item.id)?.toISOString() ?? null,
+        statusBucket,
+        // Legacy field kept for any consumer relying on it.
+        status: statusBucket === 'Below' ? 'Below Threshold' : 'Healthy',
       };
     });
 
   const linens = catalogItems
     .filter((item) => item.itemType === 'LINEN')
-    .map((item) => ({
-      id: item.id,
-      name: item.name,
-      unit: item.unit,
-      linenCategory: item.linenCategory,
-      ...calculateLinenDistribution({
+    .map((item) => {
+      const dist = calculateLinenDistribution({
         totalOwned: item.totalOwned ?? 0,
         inRooms: inRooms.get(item.id) ?? 0,
         inLaundry: inLaundry.get(item.id) ?? 0,
         cumulativeWriteOffs: linenLoss.get(item.id) ?? 0,
-      }),
-    }));
+      });
+      const stalled = stalledByItem.get(item.id) ?? 0;
+      const minPool = item.minPoolSize;
+      // §3.2 status bucket against min pool.
+      let statusBucket: 'BelowMin' | 'AtMin' | 'OK' = 'OK';
+      if (minPool !== null && dist.inStorage < minPool) statusBucket = 'BelowMin';
+      else if (minPool !== null && dist.inStorage <= minPool * 1.1) statusBucket = 'AtMin';
+      return {
+        id: item.id,
+        name: item.name,
+        unit: item.unit,
+        linenCategory: item.linenCategory,
+        minPoolSize: minPool,
+        ...dist,
+        stalled,
+        statusBucket,
+      };
+    });
+
+  const amenityCounts = {
+    totalTracked: amenities.length,
+    belowThreshold: amenities.filter((a) => a.statusBucket === 'Below').length,
+    approachingThreshold: amenities.filter((a) => a.statusBucket === 'Approaching').length,
+  };
+
+  const linenCounts = {
+    inStorageTotal: linens.reduce((sum, l) => sum + Math.max(0, l.inStorage), 0),
+    inActiveRotation: linens.reduce((sum, l) => sum + Math.max(0, l.inRooms), 0),
+    stalledGt24h: linens.reduce((sum, l) => sum + l.stalled, 0),
+    belowMinPool: linens.filter((l) => l.statusBucket === 'BelowMin' || l.statusBucket === 'AtMin').length,
+  };
+
+  const latestRestock = latestRestockRaw as { catalogItemId: string; qtyAdded: number; recordedAt: Date } | null;
+  const restockItemName = latestRestock
+    ? catalogItems.find((i) => i.id === latestRestock.catalogItemId)?.name ?? null
+    : null;
 
   return {
     amenities,
     linens,
     canMutate: ownerRoles.includes(actor.role as (typeof ownerRoles)[number]),
+    roomTypes,
+    counts: {
+      amenities: amenityCounts,
+      linens: linenCounts,
+      lastRestock: latestRestock
+        ? { at: latestRestock.recordedAt.toISOString(), itemName: restockItemName, qty: latestRestock.qtyAdded }
+        : null,
+    },
   };
 }
 
-export async function getPendingReview(actor: Actor, filters: { attributionStream?: AttributionStream | null } = {}) {
+export async function getPendingReview(
+  actor: Actor,
+  filters: { attributionStream?: AttributionStream | null; cycleId?: string | null } = {},
+) {
+  // Hotfix-9 §3.3 — pending review extended with reporter names, room type,
+  // KPI counts (oldest pending), and optional cycle filter (deep-link from
+  // Laundry status flag chip).
   const reports = (await prisma.issueReport.findMany({
     where: {
       propertyId: actor.propertyId,
@@ -237,23 +343,37 @@ export async function getPendingReview(actor: Actor, filters: { attributionStrea
     orderBy: { reportedAt: 'desc' },
   })) as IssueReportRow[];
 
-  const [catalogItemsRaw, roomsRaw] = await Promise.all([
+  const [catalogItemsRaw, roomsRaw, reporterUsersRaw] = await Promise.all([
     prisma.catalogItem.findMany({
       where: { propertyId: actor.propertyId, id: { in: reports.map((report) => report.catalogItemId).filter(Boolean) as string[] } },
     }),
     prisma.room.findMany({
       where: { propertyId: actor.propertyId, id: { in: reports.map((report) => report.roomId).filter(Boolean) as string[] } },
-      select: { id: true, number: true },
+      select: { id: true, number: true, roomTypeId: true },
+    }),
+    prisma.user.findMany({
+      where: { id: { in: Array.from(new Set(reports.map((report) => report.reportedBy))) } },
+      select: { id: true, name: true, phone: true },
     }),
   ]);
 
   const catalogItems = catalogItemsRaw as CatalogItemRow[];
-  const rooms = roomsRaw as RoomNumberRow[];
+  const rooms = roomsRaw as Array<RoomNumberRow & { roomTypeId: string }>;
+  const reporterUsers = reporterUsersRaw as Array<{ id: string; name: string | null; phone: string }>;
   const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
   const roomById = new Map(rooms.map((room) => [room.id, room]));
+  const reporterById = new Map(reporterUsers.map((u) => [u.id, u.name?.trim() || u.phone]));
+
   const cards = reports.map((report) => {
     const item = report.catalogItemId ? catalogById.get(report.catalogItemId) : null;
     const room = report.roomId ? roomById.get(report.roomId) : null;
+    // Source description for the triage card — maps PWA entry contexts.
+    const sourceLabel =
+      report.entryContext === 'LINEN_SWAP'
+        ? 'linen-swap shortage (PWA screen 6)'
+        : report.entryContext === 'LAUNDRY_RECEIVE'
+          ? 'laundry receive shortage (PWA screen 8)'
+          : 'issue report (PWA screen 9)';
     return {
       id: report.id,
       attributionStream: report.attributionStream,
@@ -268,13 +388,24 @@ export async function getPendingReview(actor: Actor, filters: { attributionStrea
       voiceFileUrl: report.voiceFileUrl,
       photoFileUrl: report.photoFileUrl,
       textNote: report.textNote,
-      reportedAt: report.reportedAt,
+      reportedAt: report.reportedAt.toISOString(),
+      reporterName: reporterById.get(report.reportedBy) ?? 'Unknown',
+      sourceLabel,
       stateVersion: report.stateVersion,
     };
   });
 
+  const oldestPendingAt = cards.length > 0 ? cards[cards.length - 1]!.reportedAt : null;
+  const counts = {
+    totalPending: cards.length,
+    roomShortage: cards.filter((c) => c.attributionStream === 'ROOM_SHORTAGE').length,
+    laundryShortage: cards.filter((c) => c.attributionStream === 'LAUNDRY_SHORTAGE').length,
+    oldestPendingAt,
+  };
+
   return {
     pendingCount: cards.length,
+    counts,
     roomShortage: cards.filter((card) => card.attributionStream === 'ROOM_SHORTAGE'),
     laundryShortage: cards.filter((card) => card.attributionStream === 'LAUNDRY_SHORTAGE'),
   };

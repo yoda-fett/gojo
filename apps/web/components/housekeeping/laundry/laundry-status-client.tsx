@@ -1,16 +1,23 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, PackageOpen, Send, Shirt, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, PackageOpen, Send, Shirt, X } from 'lucide-react';
 import Link from 'next/link';
-import React from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/layout/page-header';
 import { PageShell } from '@/components/layout/page-shell';
 import { Button } from '@/components/ui/button';
-import { Chip } from '@/components/ui/chip';
 import { EmptyState } from '@/components/ui/empty-state';
+
+// Hotfix-8 Phase B — wireframe 20-laundry fidelity:
+//  - 4 KPI strip (items out / returned / no activity / stalled)
+//  - Filter pills (All, Items out, Items returned, No activity, Stalled)
+//  - Single table sorted stalled → items-out → returned → no activity → roomNumber
+//  - Stalled rows highlighted; chevron toggles inline expansion (item breakdown
+//    + flagged-cycle deep-link).
+//  - Logging happens on the HK PWA; this surface is read-only awareness +
+//    owner-trigger fallback (kept from previous build).
 
 type RoutineItem = {
   catalogItemId: string;
@@ -19,15 +26,27 @@ type RoutineItem = {
   defaultQty: number;
 };
 
+type CycleItem = {
+  catalogItemId: string;
+  name: string;
+  unit: string;
+  qty: number;
+  remainingQty: number;
+};
+
+type LaundryState = 'ITEMS_OUT' | 'ITEMS_RETURNED' | 'NO_ACTIVITY';
+
 type LaundryRow = {
   roomId: string;
   roomNumber: string;
+  roomType: string;
   cycleId: string | null;
-  state: 'ITEMS_OUT' | 'ITEMS_RETURNED' | 'NO_ACTIVITY';
+  state: LaundryState;
   stateLabel: string;
   overdue: boolean;
   itemCount: number;
   loggedAt: string | null;
+  cycleItems: CycleItem[];
   createdBy: string | null;
   createdByUserId: string | null;
   flagCount: number;
@@ -38,14 +57,28 @@ type LaundryStatusResponse = {
   vendor: { name: string; contact: string | null };
   canMutate: boolean;
   routineItems: RoutineItem[];
+  counts: { itemsOut: number; itemsReturned: number; noActivity: number; stalled: number };
   rows: LaundryRow[];
 };
+
+type FilterKey = 'all' | 'items-out' | 'items-returned' | 'no-activity' | 'stalled';
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: 'all', label: 'All rooms' },
+  { key: 'items-out', label: 'Items out' },
+  { key: 'items-returned', label: 'Items returned' },
+  { key: 'no-activity', label: 'No activity' },
+  { key: 'stalled', label: 'Stalled (> 24h)' },
+];
 
 type PaneState = { roomId: string; roomNumber: string; hasOpenCycle: boolean } | null;
 
 export function LaundryStatusClient() {
   const queryClient = useQueryClient();
   const [pane, setPane] = useState<PaneState>(null);
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [expanded, setExpanded] = useState<string | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ['laundry-status'],
     queryFn: () => fetchJson<LaundryStatusResponse>('/api/laundry-logs/status'),
@@ -65,7 +98,13 @@ export function LaundryStatusClient() {
     },
   });
 
-  const rows = data?.rows ?? [];
+  const counts = data?.counts ?? { itemsOut: 0, itemsReturned: 0, noActivity: 0, stalled: 0 };
+
+  const sortedRows = useMemo(() => {
+    const all = data?.rows ?? [];
+    const filtered = all.filter((r) => passesFilter(r, filter));
+    return [...filtered].sort((a, b) => sortRank(a) - sortRank(b) || a.roomNumber.localeCompare(b.roomNumber));
+  }, [data?.rows, filter]);
 
   return (
     <PageShell
@@ -77,58 +116,94 @@ export function LaundryStatusClient() {
         />
       }
     >
-      {isLoading ? <LaundrySkeleton /> : null}
-      {!isLoading && rows.length === 0 ? (
-        <EmptyState icon={<Shirt className="size-6" />} heading="No rooms found" body="Laundry cycles appear here once rooms are configured." iconTone="gray" />
-      ) : null}
+      <section className="grid grid-cols-4 gap-3">
+        <KpiCard label="Items out" value={counts.itemsOut} sub="Awaiting return" tone="amber" />
+        <KpiCard label="Items returned" value={counts.itemsReturned} sub="Cycle complete today" tone="teal" />
+        <KpiCard label="No activity" value={counts.noActivity} sub="No log today" />
+        <KpiCard label="Stalled > 24h" value={counts.stalled} sub="Items still out" tone="coral" />
+      </section>
 
-      <section className="grid gap-3">
-        {rows.map((row) => (
-          <article
-            key={row.roomId}
-            className={`grid gap-3 rounded-lg border bg-white p-4 shadow-sm lg:grid-cols-[160px_1fr_180px_180px] lg:items-center ${
-              row.overdue ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200'
-            }`}
-          >
-            <div>
-              <div className="text-lg font-semibold text-slate-950">Room {row.roomNumber}</div>
-              <div className="mt-1 text-xs text-slate-500">{row.cycleId ? `Cycle ${row.cycleId.slice(0, 8)}` : 'No cycle'}</div>
-            </div>
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        {FILTERS.map((f) => {
+          const isActive = filter === f.key;
+          const isStalled = f.key === 'stalled';
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => setFilter(f.key)}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                isActive
+                  ? isStalled
+                    ? 'border-[#F4C2A1] bg-[#FFF1EA] text-[#B5572A]'
+                    : 'border-[#1DA888] bg-[#1DA888] text-white'
+                  : isStalled
+                    ? 'border-slate-200 bg-white text-[#B5572A] hover:bg-[#FFF1EA]/40'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+              }`}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+        <span className="ml-auto rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] font-medium text-slate-500">
+          Logging happens on PWA
+        </span>
+      </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Chip variant={badgeVariant(row.state, row.overdue)}>{row.stateLabel}</Chip>
-              <Chip>{row.itemCount} items</Chip>
-              {row.createdBy ? <Chip variant="neutral">Created by {row.createdBy}</Chip> : null}
-              {row.flagCount > 0 ? (
-                <Link href={row.flagHref} className="inline-flex min-h-8 items-center rounded-[8px] bg-amber-100 px-3 text-xs font-semibold text-amber-800 no-underline hover:bg-amber-200">
-                  {row.flagCount} items flagged
-                </Link>
-              ) : null}
-            </div>
+      <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <header className="flex items-center justify-between border-b border-slate-100 px-5 py-3">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Laundry cycle by room</p>
+            <p className="text-xs text-slate-500">
+              {sortedRows.length} {sortedRows.length === 1 ? 'room' : 'rooms'} · sorted: stalled first, then items-out, then by room number
+            </p>
+          </div>
+        </header>
 
-            <div className="flex items-center gap-2 text-sm text-slate-600">
-              <Clock className="size-4 text-slate-400" />
-              <span>{row.loggedAt ? timeSince(row.loggedAt) : 'No activity'}</span>
-              {row.overdue ? <span className="font-semibold text-amber-800">Over 24h</span> : null}
-            </div>
+        {isLoading ? <LaundrySkeleton /> : null}
+        {!isLoading && sortedRows.length === 0 ? (
+          <EmptyState
+            icon={<Shirt className="size-6" />}
+            heading="No rooms match this filter"
+            body="Try a different filter or wait for the next cycle update."
+            iconTone="gray"
+          />
+        ) : null}
 
-            <div className="flex justify-start lg:justify-end">
-              {data?.canMutate ? (
-                <Button
-                  type="button"
-                  variant={row.state === 'ITEMS_OUT' ? 'secondary' : 'primary'}
-                  className="min-h-10 px-3"
-                  onClick={() => setPane({ roomId: row.roomId, roomNumber: row.roomNumber, hasOpenCycle: row.state === 'ITEMS_OUT' })}
-                >
-                  <Send className="mr-2 size-4" />
-                  Send for laundry
-                </Button>
-              ) : (
-                <span className="text-xs font-medium text-slate-500">Read only</span>
-              )}
-            </div>
-          </article>
-        ))}
+        {sortedRows.length > 0 ? (
+          <table className="w-full text-left text-sm">
+            <thead className="bg-slate-50 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="px-5 py-2.5">Room</th>
+                <th className="px-5 py-2.5">State</th>
+                <th className="px-5 py-2.5">Items</th>
+                <th className="px-5 py-2.5">Last update</th>
+                <th className="px-5 py-2.5">Logged by</th>
+                <th className="px-5 py-2.5 text-right">Detail</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRows.map((row) => (
+                <RowGroup
+                  key={row.roomId}
+                  row={row}
+                  expanded={expanded === row.roomId}
+                  onToggle={() => setExpanded((cur) => (cur === row.roomId ? null : row.roomId))}
+                  canMutate={data?.canMutate ?? false}
+                  onSend={() =>
+                    setPane({ roomId: row.roomId, roomNumber: row.roomNumber, hasOpenCycle: row.state === 'ITEMS_OUT' })
+                  }
+                />
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+
+        <div className="border-t border-slate-100 bg-slate-50/40 px-5 py-3 text-[11px] text-slate-500">
+          <strong className="font-semibold text-slate-700">State definitions:</strong>{' '}
+          Items out — pieces removed for laundry, awaiting return. · Items returned — cycle complete for today. · No activity — no log entry today. · Stalled — items out for &gt; 24h.
+        </div>
       </section>
 
       {pane && data ? (
@@ -143,6 +218,219 @@ export function LaundryStatusClient() {
         />
       ) : null}
     </PageShell>
+  );
+}
+
+function passesFilter(row: LaundryRow, filter: FilterKey) {
+  if (filter === 'all') return true;
+  if (filter === 'stalled') return row.overdue;
+  if (filter === 'items-out') return row.state === 'ITEMS_OUT' && !row.overdue;
+  if (filter === 'items-returned') return row.state === 'ITEMS_RETURNED';
+  if (filter === 'no-activity') return row.state === 'NO_ACTIVITY';
+  return true;
+}
+
+function sortRank(row: LaundryRow) {
+  if (row.overdue) return 0;
+  if (row.state === 'ITEMS_OUT') return 1;
+  if (row.state === 'ITEMS_RETURNED') return 2;
+  return 3;
+}
+
+function RowGroup({
+  row,
+  expanded,
+  onToggle,
+  canMutate,
+  onSend,
+}: {
+  row: LaundryRow;
+  expanded: boolean;
+  onToggle: () => void;
+  canMutate: boolean;
+  onSend: () => void;
+}) {
+  const hasDetail = row.cycleItems.length > 0;
+  return (
+    <>
+      <tr
+        className={`border-t border-slate-100 ${
+          row.overdue ? 'bg-[#FFF6F0]' : row.state === 'NO_ACTIVITY' ? 'bg-slate-50/30' : 'bg-white'
+        }`}
+      >
+        <td className="px-5 py-3">
+          <div className="text-base font-semibold text-slate-900">{row.roomNumber}</div>
+          <div className="text-[11px] text-slate-500">{row.roomType}</div>
+        </td>
+        <td className="px-5 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <StatePill state={row.state} overdue={row.overdue} label={row.stateLabel} />
+            {row.flagCount > 0 ? (
+              <Link
+                href={row.flagHref}
+                className="inline-flex min-h-6 items-center gap-1 rounded-md bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800 no-underline hover:bg-amber-200"
+              >
+                ⚑ {row.flagCount} flagged
+              </Link>
+            ) : null}
+          </div>
+        </td>
+        <td className="px-5 py-3 text-sm text-slate-700">
+          {row.state === 'NO_ACTIVITY' ? '—' : `${row.itemCount} ${row.itemCount === 1 ? 'piece' : 'pieces'}`}
+        </td>
+        <td className="px-5 py-3 text-sm">
+          {row.loggedAt ? (
+            <>
+              <div className={`font-medium ${row.overdue ? 'text-amber-800' : 'text-slate-700'}`}>
+                {timeSince(row.loggedAt)}
+              </div>
+              <div className="text-[11px] text-slate-500">{formatDateTime(row.loggedAt)}</div>
+            </>
+          ) : (
+            <div className="text-slate-500">No log today</div>
+          )}
+        </td>
+        <td className="px-5 py-3 text-sm text-slate-700">{row.createdBy ?? '—'}</td>
+        <td className="px-5 py-3 text-right">
+          {row.state === 'NO_ACTIVITY' ? (
+            canMutate ? (
+              <button
+                type="button"
+                onClick={onSend}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1DA888] hover:border-[#1DA888]"
+              >
+                + Send for laundry
+              </button>
+            ) : (
+              <span className="text-[11px] font-medium text-slate-400">Read only</span>
+            )
+          ) : hasDetail ? (
+            <button
+              type="button"
+              onClick={onToggle}
+              aria-label={expanded ? 'Collapse' : 'Expand'}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold text-[#1DA888] hover:bg-slate-100"
+            >
+              {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+              {expanded ? 'Collapse' : 'View'}
+            </button>
+          ) : (
+            <span className="text-[11px] text-slate-400">—</span>
+          )}
+        </td>
+      </tr>
+      {expanded && hasDetail ? (
+        <tr className="border-t border-slate-100 bg-slate-50/60">
+          <td colSpan={6} className="px-5 py-4">
+            <div className="grid gap-5 md:grid-cols-[1fr_1fr]">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                  {row.state === 'ITEMS_OUT' ? 'Items out' : 'Items in this cycle'}
+                </p>
+                <ul className="mt-2 divide-y divide-slate-200 rounded-md border border-slate-200 bg-white">
+                  {row.cycleItems.map((it) => (
+                    <li key={it.catalogItemId} className="flex items-center justify-between px-3 py-2 text-sm">
+                      <span className="text-slate-700">
+                        {it.name}
+                        {it.unit ? <span className="ml-1 text-[11px] text-slate-400">({it.unit})</span> : null}
+                      </span>
+                      <span className="font-semibold text-slate-900">×{row.state === 'ITEMS_OUT' ? it.remainingQty : it.qty}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Cycle timeline</p>
+                <ul className="mt-2 space-y-2 rounded-md border border-slate-200 bg-white p-3">
+                  <li className="flex items-start gap-2 text-sm">
+                    <span className="mt-1 size-2 rounded-full bg-[#1DA888]" />
+                    <div>
+                      <div className="font-medium text-slate-800">Items out</div>
+                      <div className="text-[11px] text-slate-500">
+                        {row.loggedAt ? formatDateTime(row.loggedAt) : '—'}
+                        {row.createdBy ? ` · ${row.createdBy}` : ''}
+                      </div>
+                    </div>
+                  </li>
+                  <li className="flex items-start gap-2 text-sm">
+                    <span className={`mt-1 size-2 rounded-full ${row.state === 'ITEMS_RETURNED' ? 'bg-[#1DA888]' : row.overdue ? 'bg-orange-500' : 'bg-slate-300'}`} />
+                    <div>
+                      <div className="font-medium text-slate-800">
+                        {row.state === 'ITEMS_RETURNED' ? 'Items returned' : 'Awaiting return'}
+                      </div>
+                      <div className={`text-[11px] ${row.overdue ? 'text-amber-800 font-medium' : 'text-slate-500'}`}>
+                        {row.state === 'ITEMS_RETURNED'
+                          ? 'Cycle closed'
+                          : row.overdue
+                            ? `${timeSince(row.loggedAt ?? new Date().toISOString())} elapsed — flagged stalled`
+                            : 'In progress'}
+                      </div>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
+function StatePill({ state, overdue, label }: { state: LaundryState; overdue: boolean; label: string }) {
+  if (overdue) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-[#FEE6DD] px-2 py-0.5 text-[11px] font-bold text-[#A03A10]">
+        <span className="size-1.5 rounded-full bg-[#A03A10]" /> Items out · stalled
+      </span>
+    );
+  }
+  if (state === 'ITEMS_OUT') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-[#FFF3D6] px-2 py-0.5 text-[11px] font-bold text-[#8B6914]">
+        <span className="size-1.5 rounded-full bg-[#8B6914]" /> {label}
+      </span>
+    );
+  }
+  if (state === 'ITEMS_RETURNED') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-md bg-[#EAF6F2] px-2 py-0.5 text-[11px] font-bold text-[#16876c]">
+        <span className="size-1.5 rounded-full bg-[#16876c]" /> {label}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+      <span className="size-1.5 rounded-full bg-slate-400" /> {label}
+    </span>
+  );
+}
+
+function KpiCard({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: number;
+  sub: string;
+  tone?: 'teal' | 'amber' | 'coral';
+}) {
+  const color =
+    tone === 'teal'
+      ? 'text-teal-700'
+      : tone === 'amber'
+        ? 'text-amber-600'
+        : tone === 'coral'
+          ? 'text-orange-600'
+          : 'text-slate-900';
+  return (
+    <div className="rounded-xl bg-white p-4 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+      <p className={`mt-2 text-2xl font-bold ${color}`}>{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{sub}</p>
+    </div>
   );
 }
 
@@ -228,29 +516,34 @@ function OwnerTriggerPane({
 
 function LaundrySkeleton() {
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-3 p-5">
       {[0, 1, 2].map((key) => (
-        <div key={key} className="h-24 animate-pulse rounded-lg bg-white shadow-sm" />
+        <div key={key} className="h-16 animate-pulse rounded-lg bg-slate-100" />
       ))}
     </div>
   );
 }
 
-function badgeVariant(state: LaundryRow['state'], overdue: boolean) {
-  if (overdue) return 'caution';
-  if (state === 'ITEMS_OUT') return 'caution';
-  if (state === 'ITEMS_RETURNED') return 'positive';
-  return 'neutral';
-}
-
 function timeSince(value: string) {
   const then = new Date(value).getTime();
   const diff = Math.max(0, Date.now() - then);
-  const hours = Math.floor(diff / 3_600_000);
-  if (hours < 1) return 'Just now';
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  const remHours = hours % 24;
+  return remHours ? `${days}d ${remHours}h ago` : `${days}d ago`;
+}
+
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {

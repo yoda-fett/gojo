@@ -232,6 +232,12 @@ model PropertyAccess {
   userId     String   @map("user_id")
   role       String
   status     String   @default("ACTIVE")
+  // Hotfix-8 Phase D: per-staff shift window (HH:mm, property-local time).
+  // Default 08:00–17:00 for all roles; UI only surfaces it for non-owner roles
+  // (OWNER / CO_OWNER carry the columns for parity but never display them).
+  // Editing lands later in Settings → Users & Roles.
+  shiftStart String   @default("08:00") @map("shift_start")
+  shiftEnd   String   @default("17:00") @map("shift_end")
   invitedAt  DateTime? @map("invited_at")
   invitedBy  String?  @map("invited_by")
   createdAt  DateTime @default(now()) @map("created_at")

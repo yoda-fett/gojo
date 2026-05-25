@@ -82,7 +82,7 @@ async function validateLinenItem(actor: Actor, catalogItemId: string, category?:
 }
 
 export async function getLaundryStatus(actor: Actor) {
-  const [property, rooms, logs, items, pendingFlags, routineItems] = await Promise.all([
+  const [property, rooms, roomTypes, catalog, logs, items, pendingFlags, routineItems] = await Promise.all([
     prisma.property.findUnique({
       where: { id: actor.propertyId },
       select: { laundryVendorName: true, laundryVendorContact: true },
@@ -91,6 +91,14 @@ export async function getLaundryStatus(actor: Actor) {
       where: { propertyId: actor.propertyId, deletedAt: null },
       orderBy: { number: 'asc' },
       select: { id: true, number: true, roomTypeId: true },
+    }),
+    prisma.roomType.findMany({
+      where: { propertyId: actor.propertyId, deletedAt: null },
+      select: { id: true, name: true },
+    }),
+    prisma.catalogItem.findMany({
+      where: { propertyId: actor.propertyId, deletedAt: null, itemType: 'LINEN' },
+      select: { id: true, name: true, unit: true },
     }),
     prisma.laundryLog.findMany({
       where: { propertyId: actor.propertyId, deletedAt: null },
@@ -136,6 +144,72 @@ export async function getLaundryStatus(actor: Actor) {
     logsByRoom.set(log.roomId, group);
   }
 
+  const roomTypeMap = new Map(roomTypes.map((rt) => [rt.id, rt.name]));
+  const catalogMap = new Map(catalog.map((c) => [c.id, c]));
+  const itemsByLog = new Map<string, typeof items>();
+  for (const item of items) {
+    const group = itemsByLog.get(item.laundryLogId) ?? [];
+    group.push(item);
+    itemsByLog.set(item.laundryLogId, group);
+  }
+
+  const rows = rooms.map((room) => {
+    const roomLogs = logsByRoom.get(room.id) ?? [];
+    const openLog =
+      roomLogs.find((log) => {
+        const totals = itemTotals.get(log.id);
+        return log.state === 'ITEMS_OUT' && (totals?.remainingQty ?? 0) > 0;
+      }) ?? null;
+    const latestLog = openLog ?? roomLogs[0] ?? null;
+    const totals = latestLog ? itemTotals.get(latestLog.id) ?? { qty: 0, remainingQty: 0 } : null;
+    const summary = summarizeLaundryState(
+      latestLog
+        ? {
+            state: latestLog.state,
+            remainingQty: totals?.remainingQty ?? 0,
+            loggedAt: latestLog.createdAt,
+          }
+        : null,
+    );
+    const cycleItems = latestLog
+      ? (itemsByLog.get(latestLog.id) ?? []).map((it) => {
+          const meta = catalogMap.get(it.catalogItemId);
+          return {
+            catalogItemId: it.catalogItemId,
+            name: meta?.name ?? 'Item',
+            unit: meta?.unit ?? '',
+            qty: it.qty,
+            remainingQty: it.remainingQty,
+          };
+        })
+      : [];
+    return {
+      roomId: room.id,
+      roomNumber: room.number,
+      roomType: roomTypeMap.get(room.roomTypeId) ?? 'Room',
+      cycleId: latestLog?.id ?? null,
+      state: summary.state,
+      stateLabel: summary.label,
+      overdue: summary.overdue,
+      itemCount: summary.state === 'ITEMS_OUT' ? totals?.remainingQty ?? 0 : totals?.qty ?? 0,
+      loggedAt: latestLog?.createdAt ?? null,
+      cycleItems,
+      createdBy: latestLog?.createdByRole ?? null,
+      createdByUserId: latestLog?.createdByUserId ?? null,
+      flagCount: flagsByRoom.get(room.id) ?? 0,
+      flagHref: latestLog
+        ? `/housekeeping/inventory?tab=pending&filter=laundry-cycle:${latestLog.id}`
+        : '/housekeeping/inventory?tab=pending&filter=laundry',
+    };
+  });
+
+  const counts = {
+    itemsOut: rows.filter((r) => r.state === 'ITEMS_OUT' && !r.overdue).length,
+    itemsReturned: rows.filter((r) => r.state === 'ITEMS_RETURNED').length,
+    noActivity: rows.filter((r) => r.state === 'NO_ACTIVITY').length,
+    stalled: rows.filter((r) => r.overdue).length,
+  };
+
   return {
     vendor: {
       name: property?.laundryVendorName ?? 'Laundry vendor',
@@ -148,41 +222,8 @@ export async function getLaundryStatus(actor: Actor) {
       unit: item.unit,
       defaultQty: 1,
     })),
-    rows: rooms.map((room) => {
-      const roomLogs = logsByRoom.get(room.id) ?? [];
-      const openLog =
-        roomLogs.find((log) => {
-          const totals = itemTotals.get(log.id);
-          return log.state === 'ITEMS_OUT' && (totals?.remainingQty ?? 0) > 0;
-        }) ?? null;
-      const latestLog = openLog ?? roomLogs[0] ?? null;
-      const totals = latestLog ? itemTotals.get(latestLog.id) ?? { qty: 0, remainingQty: 0 } : null;
-      const summary = summarizeLaundryState(
-        latestLog
-          ? {
-              state: latestLog.state,
-              remainingQty: totals?.remainingQty ?? 0,
-              loggedAt: latestLog.createdAt,
-            }
-          : null,
-      );
-      return {
-        roomId: room.id,
-        roomNumber: room.number,
-        cycleId: latestLog?.id ?? null,
-        state: summary.state,
-        stateLabel: summary.label,
-        overdue: summary.overdue,
-        itemCount: summary.state === 'ITEMS_OUT' ? totals?.remainingQty ?? 0 : totals?.qty ?? 0,
-        loggedAt: latestLog?.createdAt ?? null,
-        createdBy: latestLog?.createdByRole ?? null,
-        createdByUserId: latestLog?.createdByUserId ?? null,
-        flagCount: flagsByRoom.get(room.id) ?? 0,
-        flagHref: latestLog
-          ? `/housekeeping/inventory?tab=pending&filter=laundry-cycle:${latestLog.id}`
-          : '/housekeeping/inventory?tab=pending&filter=laundry',
-      };
-    }),
+    counts,
+    rows,
   };
 }
 
