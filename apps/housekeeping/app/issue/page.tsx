@@ -26,19 +26,27 @@ export default async function IssuePrefillPage({ searchParams }: { searchParams:
     ? await prisma.property.findUnique({ where: { id: actor.propertyId }, select: { laundryVendorName: true } })
     : null;
   const roomId = first(params.roomId) ?? '';
-  const returnHref = roomId ? `/room/${roomId}` : '/laundry/receive';
+  // For a COLD/Other report opened from Profile, return to Profile (the user's
+  // origin). Laundry-receive context is only sensible when entryContext is
+  // DAMAGED_ON_RETURN. Room-specific reports return to the room.
+  const returnHref = roomId
+    ? `/room/${roomId}`
+    : entryContext === 'DAMAGED_ON_RETURN'
+      ? '/laundry/receive'
+      : '/profile';
 
-  return (
-    <IssueReportClient
-      returnHref={returnHref}
-      context={{
-        entryContext,
-        roomId,
-        catalogItemId,
-        itemName: item?.name ?? null,
-        qty: Number(first(params.qtyShort) ?? first(params.qty) ?? '1'),
-        vendorName: first(params.vendorName) ?? property?.laundryVendorName ?? 'Laundry vendor',
-      }}
-    />
-  );
+  // Only attach qty / vendorName when the entry context expects them. COLD
+  // doesn't allow either (strict schema in @gojo/db rejects unknown keys).
+  const needsQty = entryContext === 'MISSING_FROM_ROOM' || entryContext === 'DAMAGED_ON_RETURN';
+  const needsVendor = entryContext === 'DAMAGED_ON_RETURN';
+  const context: Record<string, unknown> = {
+    entryContext,
+    roomId,
+    catalogItemId,
+    itemName: item?.name ?? null,
+  };
+  if (needsQty) context.qty = Number(first(params.qtyShort) ?? first(params.qty) ?? '1');
+  if (needsVendor) context.vendorName = first(params.vendorName) ?? property?.laundryVendorName ?? 'Laundry vendor';
+
+  return <IssueReportClient returnHref={returnHref} context={context} />;
 }

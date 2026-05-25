@@ -2,6 +2,7 @@ import { checkSubscriptionGate, prisma, scopedClient, writeAuditLog } from '@goj
 import { AppError, type Actor } from '@gojo/types';
 import { z } from 'zod';
 import { checkPoolBelowMin, checkRestockRequired, syncWriteOffReviewPendingAlert } from './housekeeping-alerts';
+import { signEvidenceUrl } from '@/lib/issue-evidence-storage';
 
 type CatalogKind = 'AMENITY' | 'LINEN';
 type AttributionStream = 'ROOM_SHORTAGE' | 'LAUNDRY_SHORTAGE' | 'OTHER';
@@ -27,6 +28,7 @@ type IssueReportRow = {
   qty: number | null;
   vendorName: string | null;
   voiceFileUrl: string | null;
+  voiceSeconds: number | null;
   photoFileUrl: string | null;
   textNote: string | null;
   reportedAt: Date;
@@ -364,42 +366,52 @@ export async function getPendingReview(
   const roomById = new Map(rooms.map((room) => [room.id, room]));
   const reporterById = new Map(reporterUsers.map((u) => [u.id, u.name?.trim() || u.phone]));
 
-  const cards = reports.map((report) => {
-    const item = report.catalogItemId ? catalogById.get(report.catalogItemId) : null;
-    const room = report.roomId ? roomById.get(report.roomId) : null;
-    // Source description for the triage card — maps PWA entry contexts.
-    const sourceLabel =
-      report.entryContext === 'LINEN_SWAP'
-        ? 'linen-swap shortage (PWA screen 6)'
-        : report.entryContext === 'LAUNDRY_RECEIVE'
-          ? 'laundry receive shortage (PWA screen 8)'
-          : 'issue report (PWA screen 9)';
-    return {
-      id: report.id,
-      attributionStream: report.attributionStream,
-      entryContext: report.entryContext,
-      category: report.category,
-      itemName: item?.name ?? 'Uncatalogued item',
-      itemType: item?.itemType ?? null,
-      unit: item?.unit ?? 'item',
-      qty: report.qty ?? 1,
-      roomNumber: room?.number ?? null,
-      vendorName: report.vendorName,
-      voiceFileUrl: report.voiceFileUrl,
-      photoFileUrl: report.photoFileUrl,
-      textNote: report.textNote,
-      reportedAt: report.reportedAt.toISOString(),
-      reporterName: reporterById.get(report.reportedBy) ?? 'Unknown',
-      sourceLabel,
-      stateVersion: report.stateVersion,
-    };
-  });
+  // Hotfix-10: mint short-lived (1h) signed URLs for Supabase Storage objects
+  // so the dashboard can play voice clips / open photos. Legacy stub paths
+  // (`/uploads/...`) return null and render as missing evidence.
+  const cards = await Promise.all(
+    reports.map(async (report) => {
+      const item = report.catalogItemId ? catalogById.get(report.catalogItemId) : null;
+      const room = report.roomId ? roomById.get(report.roomId) : null;
+      const sourceLabel =
+        report.entryContext === 'LINEN_SWAP'
+          ? 'linen-swap shortage (PWA screen 6)'
+          : report.entryContext === 'LAUNDRY_RECEIVE'
+            ? 'laundry receive shortage (PWA screen 8)'
+            : 'issue report (PWA screen 9)';
+      const [voiceFileUrl, photoFileUrl] = await Promise.all([
+        signEvidenceUrl(report.voiceFileUrl).catch(() => null),
+        signEvidenceUrl(report.photoFileUrl).catch(() => null),
+      ]);
+      return {
+        id: report.id,
+        attributionStream: report.attributionStream,
+        entryContext: report.entryContext,
+        category: report.category,
+        itemName: item?.name ?? 'Uncatalogued item',
+        itemType: item?.itemType ?? null,
+        unit: item?.unit ?? 'item',
+        qty: report.qty ?? 1,
+        roomNumber: room?.number ?? null,
+        vendorName: report.vendorName,
+        voiceFileUrl,
+        voiceSeconds: report.voiceSeconds,
+        photoFileUrl,
+        textNote: report.textNote,
+        reportedAt: report.reportedAt.toISOString(),
+        reporterName: reporterById.get(report.reportedBy) ?? 'Unknown',
+        sourceLabel,
+        stateVersion: report.stateVersion,
+      };
+    }),
+  );
 
   const oldestPendingAt = cards.length > 0 ? cards[cards.length - 1]!.reportedAt : null;
   const counts = {
     totalPending: cards.length,
     roomShortage: cards.filter((c) => c.attributionStream === 'ROOM_SHORTAGE').length,
     laundryShortage: cards.filter((c) => c.attributionStream === 'LAUNDRY_SHORTAGE').length,
+    other: cards.filter((c) => c.attributionStream === 'OTHER').length,
     oldestPendingAt,
   };
 
@@ -408,6 +420,7 @@ export async function getPendingReview(
     counts,
     roomShortage: cards.filter((card) => card.attributionStream === 'ROOM_SHORTAGE'),
     laundryShortage: cards.filter((card) => card.attributionStream === 'LAUNDRY_SHORTAGE'),
+    other: cards.filter((card) => card.attributionStream === 'OTHER'),
   };
 }
 

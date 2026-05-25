@@ -492,6 +492,7 @@ model IssueReport {
   qty               Int?
   vendorName        String?  @map("vendor_name") @db.VarChar(80)
   voiceFileUrl      String?  @map("voice_file_url")
+  voiceSeconds      Int?     @map("voice_seconds")
   photoFileUrl      String?  @map("photo_file_url")
   textNote          String?  @map("text_note") @db.VarChar(280)
   reportedBy        String   @map("reported_by")

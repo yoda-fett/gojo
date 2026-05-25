@@ -192,6 +192,23 @@ export function ProfileClient({
         {/* Today's reports */}
         <div className="hk-section-head">
           <span>Today's reports</span>
+          <Link
+            href="/issue"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '6px 10px',
+              borderRadius: 8,
+              background: '#1A2B2E',
+              color: '#fff',
+              fontSize: 12,
+              fontWeight: 700,
+              textDecoration: 'none',
+            }}
+          >
+            <AlertTriangle size={13} /> Report an issue
+          </Link>
         </div>
         <section className="hk-reports">
           {reportsFiled === 0 ? (

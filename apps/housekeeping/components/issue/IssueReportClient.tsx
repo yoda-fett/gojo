@@ -39,6 +39,8 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const locked = context.entryContext !== 'COLD';
   const enabled = Boolean(voice || textNote.trim());
   const remaining = 280 - textNote.length;
@@ -60,39 +62,88 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
     setPhotoUrl(URL.createObjectURL(file));
   }
 
-  const payload = useMemo(
-    () => ({
+  // Server schemas (@gojo/db) are strict — unknown keys 422. Build the payload
+  // shape per entryContext so stray context defaults don't leak through.
+  const payload = useMemo(() => {
+    const note = textNote.trim() || undefined;
+    if (context.entryContext === 'MISSING_FROM_ROOM') {
+      return {
+        entryContext: context.entryContext,
+        category: 'MISSING_ITEM',
+        roomId: context.roomId,
+        catalogItemId: context.catalogItemId,
+        qty: context.qty,
+        textNote: note,
+      };
+    }
+    if (context.entryContext === 'DAMAGED_ON_RETURN') {
+      return {
+        entryContext: context.entryContext,
+        category: 'DAMAGED_RETURN',
+        catalogItemId: context.catalogItemId,
+        qty: context.qty,
+        vendorName: context.vendorName,
+        textNote: note,
+      };
+    }
+    // COLD — only the fields the schema allows.
+    return {
       entryContext: context.entryContext,
       category,
       roomId: context.roomId || undefined,
       catalogItemId: context.catalogItemId || undefined,
-      qty: context.qty || undefined,
       vendorName: context.vendorName || undefined,
-      textNote: textNote.trim() || undefined,
-    }),
-    [category, context, textNote],
-  );
+      textNote: note,
+    };
+  }, [category, context, textNote]);
 
   async function submit() {
-    const form = new FormData();
-    for (const [key, value] of Object.entries(payload)) {
-      if (value !== undefined && value !== null) form.append(key, String(value));
-    }
-    if (voice?.blob) {
-      form.append('voiceFile', voice.blob, 'issue-voice.webm');
-      form.append('voiceSeconds', String(voice.seconds));
-    }
-    if (photo) form.append('photoFile', photo, photo.name);
-    const res = await fetch('/api/issue-reports', { method: 'POST', headers: { 'idempotency-key': crypto.randomUUID() }, body: form });
-    if (res.status === 202) {
-      setToast('Report queued. It will send when online.');
-      return;
-    }
-    if (res.ok) {
-      setToast('Report sent. Owner will review.');
-      window.setTimeout(() => {
-        window.location.href = `${returnHref}?toast=${encodeURIComponent('Report sent. Owner will review.')}`;
-      }, 500);
+    setError('');
+    setSubmitting(true);
+    try {
+      const form = new FormData();
+      for (const [key, value] of Object.entries(payload)) {
+        if (value !== undefined && value !== null) form.append(key, String(value));
+      }
+      if (voice?.blob) {
+        form.append('voiceFile', voice.blob, 'issue-voice.webm');
+        form.append('voiceSeconds', String(voice.seconds));
+      }
+      if (photo) form.append('photoFile', photo, photo.name);
+      const res = await fetch('/api/issue-reports', {
+        method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+        body: form,
+      });
+      if (res.status === 202) {
+        setToast('Report queued. It will send when online.');
+        return;
+      }
+      if (res.ok) {
+        setToast('Report sent. Owner will review.');
+        window.setTimeout(() => {
+          window.location.href = `${returnHref}?toast=${encodeURIComponent('Report sent. Owner will review.')}`;
+        }, 500);
+        return;
+      }
+      // Non-OK response — surface the server error so the owner sees why.
+      let message = `Submit failed (HTTP ${res.status}).`;
+      try {
+        const body = await res.json();
+        const parts: string[] = [];
+        if (body?.message) parts.push(body.message);
+        if (body?.field) parts.push(`field: ${body.field}`);
+        if (body?.reason) parts.push(`reason: ${body.reason}`);
+        if (parts.length > 0) message = `${parts.join(' · ')} (HTTP ${res.status})`;
+      } catch {
+        // body wasn't JSON; keep the generic message.
+      }
+      setError(message);
+    } catch (err) {
+      // Network / fetch threw before reaching the server.
+      setError(err instanceof Error ? `Network error: ${err.message}` : 'Network error — please retry.');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -120,6 +171,11 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
         {toast ? (
           <div style={{ marginBottom: 10, borderRadius: 8, padding: 10, background: '#E7F4F1', color: '#127C69', fontWeight: 700, fontSize: 13 }}>
             {toast}
+          </div>
+        ) : null}
+        {error ? (
+          <div style={{ marginBottom: 10, borderRadius: 8, padding: 10, background: '#FEE6DD', color: '#A03A10', fontWeight: 600, fontSize: 13 }}>
+            {error}
           </div>
         ) : null}
 
@@ -205,6 +261,7 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
           <input
             type="file"
             accept="image/*"
+            capture="environment"
             style={{ display: 'none' }}
             onChange={(event) => handlePhoto(event.target.files?.[0])}
           />
@@ -225,8 +282,8 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
         }}
       >
         <div className={`hk-cta-hint${helperTone ? ` ${helperTone}` : ''}`}>{helperText}</div>
-        <button className="hk-cta" type="button" disabled={!enabled} onClick={submit}>
-          Submit Report
+        <button className="hk-cta" type="button" disabled={!enabled || submitting} onClick={submit}>
+          {submitting ? 'Submitting…' : 'Submit Report'}
         </button>
       </div>
     </PwaShell>

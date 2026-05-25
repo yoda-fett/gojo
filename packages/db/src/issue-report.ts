@@ -179,6 +179,7 @@ export async function createIssueReport(
           qty: 'qty' in input ? input.qty : null,
           vendorName: 'vendorName' in input ? input.vendorName ?? null : null,
           voiceFileUrl: evidence.voiceFileUrl ?? null,
+          voiceSeconds: evidence.voiceSeconds ?? null,
           photoFileUrl: evidence.photoFileUrl ?? null,
           textNote: input.textNote ?? null,
           reportedBy: actor.userId,

@@ -72,6 +72,7 @@ type PendingCard = {
   roomNumber: string | null;
   vendorName: string | null;
   voiceFileUrl: string | null;
+  voiceSeconds: number | null;
   photoFileUrl: string | null;
   textNote: string | null;
   reportedAt: string;
@@ -82,9 +83,10 @@ type PendingCard = {
 
 type PendingResponse = {
   pendingCount: number;
-  counts: { totalPending: number; roomShortage: number; laundryShortage: number; oldestPendingAt: string | null };
+  counts: { totalPending: number; roomShortage: number; laundryShortage: number; other: number; oldestPendingAt: string | null };
   roomShortage: PendingCard[];
   laundryShortage: PendingCard[];
+  other: PendingCard[];
 };
 
 type PaneState =
@@ -715,7 +717,7 @@ function PendingTab({
   canMutate: boolean;
   onReviewed: () => Promise<void>;
 }) {
-  const counts = data?.counts ?? { totalPending: 0, roomShortage: 0, laundryShortage: 0, oldestPendingAt: null };
+  const counts = data?.counts ?? { totalPending: 0, roomShortage: 0, laundryShortage: 0, other: 0, oldestPendingAt: null };
 
   if (loading) return <GridSkeleton />;
   if (!data || data.pendingCount === 0) {
@@ -731,10 +733,11 @@ function PendingTab({
 
   return (
     <>
-      <section className="grid grid-cols-4 gap-3">
+      <section className="grid grid-cols-5 gap-3">
         <KpiCard label="Total pending" value={counts.totalPending} sub="awaiting your review" tone="coral" />
         <KpiCard label="Room shortage" value={counts.roomShortage} sub="guest-loss attribution" tone="amber" />
         <KpiCard label="Vendor shortage" value={counts.laundryShortage} sub="vendor-liability attribution" tone="violet" />
+        <KpiCard label="Other / general" value={counts.other} sub="property + cold reports" />
         <KpiCard
           label="Oldest pending"
           textValue={counts.oldestPendingAt ? timeSince(counts.oldestPendingAt) : '—'}
@@ -765,6 +768,15 @@ function PendingTab({
         canMutate={canMutate}
         onReviewed={onReviewed}
       />
+      <PendingStream
+        tone="slate"
+        title="Other / general"
+        attribution="No write-off · attribution: OTHER"
+        sourceLabel="cold reports from PWA screen 9 (room or property-level)"
+        cards={data.other}
+        canMutate={canMutate}
+        onReviewed={onReviewed}
+      />
     </>
   );
 }
@@ -778,7 +790,7 @@ function PendingStream({
   canMutate,
   onReviewed,
 }: {
-  tone: 'amber' | 'violet';
+  tone: 'amber' | 'violet' | 'slate';
   title: string;
   attribution: string;
   sourceLabel: string;
@@ -814,7 +826,9 @@ function PendingStream({
   const palette =
     tone === 'amber'
       ? { dot: 'bg-amber-500', badge: 'bg-amber-50 text-amber-800 border-amber-200', wrap: 'border-amber-200', accent: 'text-amber-900' }
-      : { dot: 'bg-[#6D3FCE]', badge: 'bg-[#F1E4F8] text-[#6B2A8F] border-[#E2D0F0]', wrap: 'border-[#E2D0F0]', accent: 'text-[#6B2A8F]' };
+      : tone === 'violet'
+        ? { dot: 'bg-[#6D3FCE]', badge: 'bg-[#F1E4F8] text-[#6B2A8F] border-[#E2D0F0]', wrap: 'border-[#E2D0F0]', accent: 'text-[#6B2A8F]' }
+        : { dot: 'bg-slate-400', badge: 'bg-slate-100 text-slate-700 border-slate-200', wrap: 'border-slate-200', accent: 'text-slate-800' };
 
   if (cards.length === 0) {
     return (
@@ -957,6 +971,9 @@ function TriageCard({
           <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white p-2">
             <Mic className="size-3.5 text-slate-500" />
             <audio src={card.voiceFileUrl} controls className="h-7 w-full" preload="none" />
+            {card.voiceSeconds ? (
+              <span className="ml-1 shrink-0 text-[11px] tabular-nums text-slate-500">{formatDuration(card.voiceSeconds)}</span>
+            ) : null}
           </div>
         ) : null}
         {card.photoFileUrl ? (
@@ -1039,13 +1056,28 @@ function TriageCard({
 
 /* ─── Inventory side pane (arrival / write-off) ──────────────────── */
 
+// Write-off reasons — preset list per item type. Backend accepts a single
+// string; we concatenate as "Reason — note" when a note is provided.
+// "Other" reveals the note field automatically.
+const LINEN_REASONS = ['Stained — unrecoverable', 'Torn / damaged', 'Lost / missing', 'Worn out', 'Burnt', 'Other'] as const;
+const AMENITY_REASONS = ['Expired', 'Damaged in storage', 'Spilled / contaminated', 'Recalled', 'Other'] as const;
+
 function InventoryPane({ pane, onClose, onSaved }: { pane: NonNullable<PaneState>; onClose: () => void; onSaved: () => Promise<void> }) {
+  const isWriteOff = pane.mode === 'writeOff';
+  const reasonOptions = pane.item.itemType === 'LINEN' ? LINEN_REASONS : AMENITY_REASONS;
   const [qty, setQty] = useState('1');
-  const [reason, setReason] = useState('');
+  const [reasonCategory, setReasonCategory] = useState<string>(reasonOptions[0]);
+  const [reasonNote, setReasonNote] = useState('');
   const [reference, setReference] = useState('');
   const [sourceLocation, setSourceLocation] = useState<'STORAGE' | 'LAUNDRY_CYCLE'>('STORAGE');
   const [busy, setBusy] = useState(false);
-  const isWriteOff = pane.mode === 'writeOff';
+
+  const isOther = reasonCategory === 'Other';
+  const composedReason = isOther
+    ? reasonNote.trim()
+    : reasonNote.trim()
+      ? `${reasonCategory} — ${reasonNote.trim()}`
+      : reasonCategory;
 
   async function submit() {
     setBusy(true);
@@ -1057,7 +1089,7 @@ function InventoryPane({ pane, onClose, onSaved }: { pane: NonNullable<PaneState
         body: JSON.stringify({
           catalogItemId: pane.item.id,
           qty: Number(qty),
-          ...(isWriteOff ? { reason, sourceLocation } : { reference: reference || null }),
+          ...(isWriteOff ? { reason: composedReason, sourceLocation } : { reference: reference || null }),
         }),
       });
       await onSaved();
@@ -1079,7 +1111,7 @@ function InventoryPane({ pane, onClose, onSaved }: { pane: NonNullable<PaneState
           </button>
         </div>
         <label className="grid gap-1 text-sm font-medium text-slate-700">
-          Quantity
+          Quantity {isWriteOff ? 'to write off' : ''}
           <input value={qty} onChange={(event) => setQty(event.target.value)} type="number" min="1" className="rounded-lg border border-slate-200 px-3 py-2" />
         </label>
         {isWriteOff ? (
@@ -1088,14 +1120,38 @@ function InventoryPane({ pane, onClose, onSaved }: { pane: NonNullable<PaneState
               <label className="mt-4 grid gap-1 text-sm font-medium text-slate-700">
                 Source location
                 <select value={sourceLocation} onChange={(event) => setSourceLocation(event.target.value as 'STORAGE' | 'LAUNDRY_CYCLE')} className="rounded-lg border border-slate-200 px-3 py-2">
-                  <option value="STORAGE">Storage</option>
-                  <option value="LAUNDRY_CYCLE">Laundry cycle</option>
+                  <option value="STORAGE">Storage (default)</option>
+                  <option value="LAUNDRY_CYCLE">Active laundry cycle</option>
                 </select>
+                <span className="text-[11px] text-slate-500">
+                  If items were damaged during wash, pick the cycle so it&apos;s closed properly.
+                </span>
               </label>
             ) : null}
             <label className="mt-4 grid gap-1 text-sm font-medium text-slate-700">
-              Reason
-              <textarea value={reason} onChange={(event) => setReason(event.target.value)} rows={4} className="rounded-lg border border-slate-200 px-3 py-2" />
+              Reason <span className="text-[#B5572A]">*</span>
+              <select
+                value={reasonCategory}
+                onChange={(event) => setReasonCategory(event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-2"
+              >
+                {reasonOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </label>
+            <label className="mt-4 grid gap-1 text-sm font-medium text-slate-700">
+              Note {isOther ? <span className="text-[#B5572A]">*</span> : <span className="text-xs font-normal text-slate-500">(optional)</span>}
+              <input
+                value={reasonNote}
+                onChange={(event) => setReasonNote(event.target.value)}
+                placeholder={isOther ? 'Describe the reason' : 'Add context — e.g., "coffee stain near pillow"'}
+                maxLength={240}
+                className="rounded-lg border border-slate-200 px-3 py-2"
+              />
+              <span className="text-[11px] text-slate-500">
+                Submitted as: <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-700">{composedReason || '—'}</code>
+              </span>
             </label>
           </>
         ) : (
@@ -1104,8 +1160,13 @@ function InventoryPane({ pane, onClose, onSaved }: { pane: NonNullable<PaneState
             <input value={reference} onChange={(event) => setReference(event.target.value)} className="rounded-lg border border-slate-200 px-3 py-2" />
           </label>
         )}
-        <Button type="button" disabled={busy || (isWriteOff && !reason.trim())} onClick={submit} className="mt-5 w-full">
-          <PackagePlus className="mr-2 size-4" /> Save
+        <Button
+          type="button"
+          disabled={busy || (isWriteOff && composedReason.length === 0)}
+          onClick={submit}
+          className="mt-5 w-full"
+        >
+          <PackagePlus className="mr-2 size-4" /> {isWriteOff ? 'Record write-off' : 'Save'}
         </Button>
       </aside>
     </div>
@@ -1157,6 +1218,13 @@ function relativeDay(value: string) {
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDuration(seconds: number) {
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {

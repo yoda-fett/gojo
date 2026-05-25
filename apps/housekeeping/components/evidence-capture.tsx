@@ -218,6 +218,7 @@ export function EvidenceCapture({
         <input
           type="file"
           accept="image/*"
+          capture="environment"
           style={{ display: 'none' }}
           onChange={(event) => handlePhotoChange(event.target.files?.[0])}
         />
