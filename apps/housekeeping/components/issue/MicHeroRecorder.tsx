@@ -27,6 +27,7 @@ export function MicHeroRecorder({ value, onChange }: { value: any; onChange: (va
   const [seconds, setSeconds] = useState(0);
   const [bars, setBars] = useState<number[]>(() => Array(BAR_COUNT).fill(IDLE_BAR_HEIGHT));
   const [playing, setPlaying] = useState(false);
+  const [micError, setMicError] = useState<string | null>(null);
 
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
@@ -98,6 +99,18 @@ export function MicHeroRecorder({ value, onChange }: { value: any; onChange: (va
   useEffect(() => () => tearDownAnalyser(), [tearDownAnalyser]);
 
   async function start() {
+    setMicError(null);
+    // navigator.mediaDevices is undefined in insecure contexts (plain HTTP over
+    // an IP). Guard so the user sees a clear message instead of a crash.
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      const isSecure = typeof window !== 'undefined' && (window.isSecureContext || window.location.hostname === 'localhost');
+      setMicError(
+        isSecure
+          ? 'Microphone API not available in this browser.'
+          : 'Voice recording requires HTTPS. Open this app via the deployed URL (or use localhost) — recording is blocked over plain HTTP on an IP address.',
+      );
+      return;
+    }
     try {
       const next = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.current = next;
@@ -152,6 +165,13 @@ export function MicHeroRecorder({ value, onChange }: { value: any; onChange: (va
       rec.start();
     } catch (err) {
       console.error('Mic unavailable:', err);
+      const message =
+        err instanceof DOMException && err.name === 'NotAllowedError'
+          ? 'Microphone permission denied. Allow mic access in your browser settings and tap again.'
+          : err instanceof Error
+            ? `Could not start recording: ${err.message}`
+            : 'Could not start recording.';
+      setMicError(message);
       tearDownAnalyser();
     }
   }
@@ -312,6 +332,23 @@ export function MicHeroRecorder({ value, onChange }: { value: any; onChange: (va
       <div className="hk-voice-hint">
         Describe the issue in any language. <strong>Voice is fastest</strong> — owner reviews and decides.
       </div>
+      {micError ? (
+        <div
+          role="alert"
+          style={{
+            marginTop: 12,
+            padding: '8px 12px',
+            borderRadius: 8,
+            background: '#FEE6DD',
+            color: '#A03A10',
+            fontSize: 12.5,
+            fontWeight: 600,
+            lineHeight: 1.4,
+          }}
+        >
+          {micError}
+        </div>
+      ) : null}
     </section>
   );
 }

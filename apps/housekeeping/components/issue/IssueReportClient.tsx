@@ -8,6 +8,7 @@ import { CategoryPicker } from './CategoryPicker';
 import { MicHeroRecorder } from './MicHeroRecorder';
 import { PrefillBanner } from './PrefillBanner';
 import { PwaShell } from '../pwa-shell';
+import { compressImage } from '@/lib/compress-image';
 
 function lockedCategory(entryContext: string) {
   if (entryContext === 'MISSING_FROM_ROOM') return 'MISSING_ITEM';
@@ -41,6 +42,9 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
   const [toast, setToast] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Discrete stage shown in the overlay so the user knows what's happening
+  // (compression takes ~10s on phones; upload is fast).
+  const [submitStage, setSubmitStage] = useState<'compressing' | 'uploading' | null>(null);
   const locked = context.entryContext !== 'COLD';
   const enabled = Boolean(voice || textNote.trim());
   const remaining = 280 - textNote.length;
@@ -51,15 +55,24 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
     return () => URL.revokeObjectURL(photoUrl);
   }, [photoUrl]);
 
-  function handlePhoto(file: File | null | undefined) {
+  async function handlePhoto(file: File | null | undefined) {
     if (photoUrl) URL.revokeObjectURL(photoUrl);
     if (!file) {
       setPhoto(null);
       setPhotoUrl(null);
       return;
     }
-    setPhoto(file);
-    setPhotoUrl(URL.createObjectURL(file));
+    // Compress before storing so the submit payload stays under Vercel's
+    // 4.5 MB body cap. Originals from modern phone cameras are 5–10 MB.
+    // This step can take ~10s on phones — overlay it so the user waits.
+    setSubmitStage('compressing');
+    try {
+      const compressed = await compressImage(file);
+      setPhoto(compressed);
+      setPhotoUrl(URL.createObjectURL(compressed));
+    } finally {
+      setSubmitStage(null);
+    }
   }
 
   // Server schemas (@gojo/db) are strict — unknown keys 422. Build the payload
@@ -100,6 +113,7 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
   async function submit() {
     setError('');
     setSubmitting(true);
+    setSubmitStage('uploading');
     try {
       const form = new FormData();
       for (const [key, value] of Object.entries(payload)) {
@@ -144,6 +158,7 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
       setError(err instanceof Error ? `Network error: ${err.message}` : 'Network error — please retry.');
     } finally {
       setSubmitting(false);
+      setSubmitStage(null);
     }
   }
 
@@ -286,6 +301,46 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
           {submitting ? 'Submitting…' : 'Submit Report'}
         </button>
       </div>
+      {submitStage ? (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            background: 'rgba(26,43,46,0.55)',
+            backdropFilter: 'blur(2px)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 14,
+            padding: '0 24px',
+            textAlign: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              border: '4px solid rgba(255,255,255,0.25)',
+              borderTopColor: '#fff',
+              animation: 'hk-spin 0.9s linear infinite',
+            }}
+          />
+          <div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>
+            {submitStage === 'compressing' ? 'Optimising photo…' : 'Sending report…'}
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.78)', fontSize: 12.5, maxWidth: 240, lineHeight: 1.4 }}>
+            {submitStage === 'compressing'
+              ? 'Resizing for faster upload. This can take up to 10 seconds on phones.'
+              : 'Uploading voice + photo to the owner. Hold on a moment.'}
+          </div>
+          <style>{`@keyframes hk-spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      ) : null}
     </PwaShell>
   );
 }

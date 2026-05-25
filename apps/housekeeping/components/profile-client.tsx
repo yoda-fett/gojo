@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Box,
@@ -19,6 +19,18 @@ import { PwaShell } from './pwa-shell';
 import type { RoomCardData } from './room-card-mobile';
 import { useSyncState } from './sync-provider';
 
+type IssueReportRow = {
+  id: string;
+  category: string;
+  textNote: string | null;
+  voiceUrl: string | null;
+  voiceSeconds: number | null;
+  photoUrl: string | null;
+  reportedAt: string;
+  roomNumber: string | null;
+  status: string;
+};
+
 export function ProfileClient({
   dateLabel,
   userInitial,
@@ -28,6 +40,8 @@ export function ProfileClient({
   filedMissing,
   filedDamaged,
   hasPin,
+  reports = [],
+  toast: initialToast = null,
 }: {
   dateLabel: string;
   userInitial: string;
@@ -37,10 +51,25 @@ export function ProfileClient({
   filedMissing: number;
   filedDamaged: number;
   hasPin: boolean;
+  reports?: IssueReportRow[];
+  toast?: string | null;
 }) {
   const router = useRouter();
   const sync = useSyncState();
   const [loggingOut, setLoggingOut] = useState(false);
+  // Show the toast for ~5s after a successful submit-redirect, then clear
+  // the query string so it doesn't re-fire on back-button navigation.
+  const [toastMessage, setToastMessage] = useState<string | null>(initialToast);
+  useEffect(() => {
+    if (!toastMessage) return;
+    if (typeof window !== 'undefined' && window.history.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('toast');
+      window.history.replaceState({}, '', url.toString());
+    }
+    const timer = window.setTimeout(() => setToastMessage(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
 
   async function endShift() {
     setLoggingOut(true);
@@ -76,6 +105,28 @@ export function ProfileClient({
       userInitial={userInitial}
     >
       <div style={{ padding: '14px 16px 200px' }}>
+        {toastMessage ? (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              marginBottom: 12,
+              borderRadius: 10,
+              padding: '12px 14px',
+              background: '#E7F4F1',
+              border: '1px solid #B7E2D5',
+              color: '#0F7A5E',
+              fontSize: 13.5,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <Check size={16} strokeWidth={3} />
+            <span>{toastMessage}</span>
+          </div>
+        ) : null}
         {/* Identity */}
         <section className="hk-identity">
           <span className="hk-id-avatar">{userInitial}</span>
@@ -211,29 +262,21 @@ export function ProfileClient({
           </Link>
         </div>
         <section className="hk-reports">
-          {reportsFiled === 0 ? (
+          {reports.length === 0 ? (
             <div className="hk-reports-zero">No reports filed today.</div>
           ) : (
             <>
-              <div className="hk-reports-lead">
-                <strong>Today you filed:</strong> {filedMissing} missing item{filedMissing === 1 ? '' : 's'}, {filedDamaged} damaged return{filedDamaged === 1 ? '' : 's'}.
+              <div className="hk-reports-lead" style={{ marginBottom: 8 }}>
+                <strong>Today you filed:</strong>{' '}
+                {reports.length} report{reports.length === 1 ? '' : 's'}
+                {filedMissing > 0 ? ` · ${filedMissing} missing` : ''}
+                {filedDamaged > 0 ? ` · ${filedDamaged} damaged` : ''}
               </div>
-              {filedMissing > 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-                  <span className="hk-item-ico" aria-hidden><Search size={14} /></span>
-                  <div style={{ flex: 1, fontSize: 12.5, color: '#1A2B2E', fontWeight: 600 }}>
-                    {filedMissing} Missing item{filedMissing === 1 ? '' : 's'}
-                  </div>
-                </div>
-              ) : null}
-              {filedDamaged > 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-                  <span className="hk-item-ico" aria-hidden><PackageX size={14} /></span>
-                  <div style={{ flex: 1, fontSize: 12.5, color: '#1A2B2E', fontWeight: 600 }}>
-                    {filedDamaged} Damaged return{filedDamaged === 1 ? '' : 's'}
-                  </div>
-                </div>
-              ) : null}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {reports.map((r) => (
+                  <ReportRow key={r.id} report={r} />
+                ))}
+              </div>
             </>
           )}
         </section>
@@ -311,5 +354,104 @@ export function ProfileClient({
         </button>
       </div>
     </PwaShell>
+  );
+}
+
+function ReportRow({ report }: { report: IssueReportRow }) {
+  const time = useMemo(() => {
+    try {
+      return new Date(report.reportedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  }, [report.reportedAt]);
+  const catLabel =
+    report.category === 'MISSING_ITEM'
+      ? 'Missing item'
+      : report.category === 'DAMAGED_RETURN'
+        ? 'Damaged return'
+        : report.category === 'DAMAGE_IN_ROOM'
+          ? 'Damage in room'
+          : 'Other';
+  const statusTone =
+    report.status === 'APPROVED'
+      ? { bg: '#E7F4F1', fg: '#0F7A5E', label: 'Approved' }
+      : report.status === 'REJECTED'
+        ? { bg: '#FEE6DD', fg: '#A03A10', label: 'Rejected' }
+        : { bg: '#FFF3D6', fg: '#8B6914', label: 'Pending' };
+
+  return (
+    <article
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'auto 1fr auto',
+        gap: 10,
+        alignItems: 'center',
+        padding: 10,
+        borderRadius: 10,
+        background: '#fff',
+        border: '1px solid #E8EFEE',
+      }}
+    >
+      {report.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <a href={report.photoUrl} target="_blank" rel="noreferrer" style={{ display: 'block' }}>
+          <img
+            src={report.photoUrl}
+            alt=""
+            style={{ width: 46, height: 46, borderRadius: 8, objectFit: 'cover', border: '1px solid #E8EFEE' }}
+          />
+        </a>
+      ) : (
+        <div
+          style={{
+            width: 46,
+            height: 46,
+            borderRadius: 8,
+            background: '#F4F9F8',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#9EAEAC',
+          }}
+        >
+          <AlertTriangle size={16} />
+        </div>
+      )}
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#1A2B2E' }}>{catLabel}</span>
+          {report.roomNumber ? (
+            <span style={{ fontSize: 11, color: '#5C7170' }}>Room {report.roomNumber}</span>
+          ) : (
+            <span style={{ fontSize: 11, color: '#5C7170', fontStyle: 'italic' }}>Property-wide</span>
+          )}
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              padding: '1px 6px',
+              borderRadius: 4,
+              background: statusTone.bg,
+              color: statusTone.fg,
+              textTransform: 'uppercase',
+              letterSpacing: 0.4,
+            }}
+          >
+            {statusTone.label}
+          </span>
+        </div>
+        {report.voiceUrl ? (
+          <audio src={report.voiceUrl} controls preload="none" controlsList="nodownload noremoteplayback noplaybackrate" style={{ height: 28, width: '130%', marginTop: 4 }} />
+          //<audio src={report.voiceUrl} controls className="h-7 w-full" preload="none" controlsList="nodownload noremoteplayback noplaybackrate" />
+        ) : null}
+        {report.textNote ? (
+          <p style={{ margin: '4px 0 0', fontSize: 11.5, color: '#5C7170', fontStyle: 'italic', lineHeight: 1.4 }}>
+            “{report.textNote}”
+          </p>
+        ) : null}
+      </div>
+      <span style={{ fontSize: 10.5, color: '#9EAEAC', alignSelf: 'flex-start' }}>{time}</span>
+    </article>
   );
 }

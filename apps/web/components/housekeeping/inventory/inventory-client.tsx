@@ -970,7 +970,7 @@ function TriageCard({
         {card.voiceFileUrl ? (
           <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white p-2">
             <Mic className="size-3.5 text-slate-500" />
-            <audio src={card.voiceFileUrl} controls className="h-7 w-full" preload="none" />
+            <audio src={card.voiceFileUrl} controls className="h-7 w-full" preload="none" controlsList="nodownload noremoteplayback noplaybackrate" />
             {card.voiceSeconds ? (
               <span className="ml-1 shrink-0 text-[11px] tabular-nums text-slate-500">{formatDuration(card.voiceSeconds)}</span>
             ) : null}
