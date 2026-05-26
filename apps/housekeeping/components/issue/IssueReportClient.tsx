@@ -33,6 +33,15 @@ function subtitleFor(entryContext: string) {
   return 'Speak in any language · owner reviews';
 }
 
+function middleTruncate(text, max = 35) {
+  if (!text) return '';
+  if (text.length <= max) return text;
+  const keep = Math.floor((max - 1) / 2);
+  const start = text.slice(0, keep);
+  const end = text.slice(text.length - keep);
+  return `${start}…${end}`;
+}
+
 export function IssueReportClient({ context, returnHref }: { context: any; returnHref: string }) {
   const [category, setCategory] = useState(lockedCategory(context.entryContext));
   const [voice, setVoice] = useState(null);
@@ -134,7 +143,7 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
         return;
       }
       if (res.ok) {
-        setToast('Report sent. Owner will review.');
+        setToast('Report sent. The report will be reviewed.');
         window.setTimeout(() => {
           window.location.href = `${returnHref}?toast=${encodeURIComponent('Report sent. Owner will review.')}`;
         }, 500);
@@ -265,7 +274,13 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
             </span>
           )}
           <div className="hk-photo-text">
+            {/*
             <div className="hk-photo-label">{photo ? photo.name : 'Add a photo'}</div>
+            */}
+            <div className="hk-photo-label" title={photo ? photo.name : 'Add a photo'}>
+              {photo ? middleTruncate(photo.name, 21) : 'Add a photo'}
+            </div>
+
             <div className="hk-photo-sub">
               {photo
                 ? 'Tap to replace'
