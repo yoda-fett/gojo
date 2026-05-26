@@ -278,7 +278,7 @@ export function IssueReportClient({ context, returnHref }: { context: any; retur
             <div className="hk-photo-label">{photo ? photo.name : 'Add a photo'}</div>
             */}
             <div className="hk-photo-label" title={photo ? photo.name : 'Add a photo'}>
-              {photo ? middleTruncate(photo.name, 21) : 'Add a photo'}
+              {photo ? middleTruncate(photo.name, 18) : 'Add a photo'}
             </div>
 
             <div className="hk-photo-sub">
